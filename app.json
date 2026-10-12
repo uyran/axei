@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "scaffold",
-    "slug": "scaffold",
+    "name": "Axei",
+    "slug": "axei",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "scaffold",
+    "icon": "./assets/images/Axei.png",
+    "scheme": "axei",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/Axei.png"
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +31,21 @@
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O Axei usa o microfone para gravar áudios nos cartões."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Axei acessa suas fotos para adicioná-las aos cartões.",
+          "cameraPermission": "O Axei usa a câmera para tirar fotos dos cartões.",
+          "microphonePermission": false
         }
       ]
     ],
