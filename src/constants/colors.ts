@@ -9,6 +9,7 @@ export const colors = {
   borderStrong: '#9CA3AF',
   danger: '#B91C1C',
   dangerSurface: '#FEE2E2',
+  favorite: '#DC2626',
   success: '#15803D',
   successSurface: '#DCFCE7',
 } as const;

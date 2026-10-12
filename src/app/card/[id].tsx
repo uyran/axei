@@ -31,7 +31,9 @@ import { useCards } from '@/hooks/use-cards';
 import {
   CARD_PLACEHOLDER_NAME,
   displayCardName,
+  EMERGENCY_COLOR,
   hasSignificantContent,
+  isEmergencyCard,
 } from '@/utils/cards';
 
 const FLIP_DURATION_MS = 450;
@@ -177,9 +179,14 @@ export default function CardDetailScreen() {
           hitSlop={8}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
         >
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={26} color={colors.primary} />
         </Pressable>
-        <Text style={styles.topTitle}>Cartão</Text>
+        <Image
+          source={require('../../../assets/images/Axei.png')}
+          style={styles.topIcon}
+          contentFit="contain"
+          accessibilityLabel="Ícone do Axei"
+        />
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Opções do cartão"
@@ -187,7 +194,7 @@ export default function CardDetailScreen() {
           hitSlop={8}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
+          <Ionicons name="ellipsis-horizontal" size={24} color={colors.primary} />
         </Pressable>
       </View>
 
@@ -203,11 +210,11 @@ export default function CardDetailScreen() {
                 hitSlop={8}
                 style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
               >
-                <Ionicons name="save-outline" size={24} color={colors.textMuted} />
+                <Ionicons name="save-outline" size={24} color={colors.primary} />
               </Pressable>
               <TextInput
                 ref={nameInputRef}
-                style={styles.nameInput}
+                style={[styles.nameInput, isEmergencyCard(card) && styles.nameInputEmergency]}
                 value={card.name}
                 selection={nameSelection}
                 onChangeText={(text) => {
@@ -226,7 +233,7 @@ export default function CardDetailScreen() {
                 hitSlop={8}
                 style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
               >
-                <Ionicons name="sync-outline" size={22} color={colors.textMuted} />
+                <Ionicons name="sync-outline" size={22} color={colors.primary} />
               </Pressable>
             </View>
 
@@ -263,7 +270,7 @@ export default function CardDetailScreen() {
                 hitSlop={8}
                 style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
               >
-                <Ionicons name="sync-outline" size={22} color={colors.textMuted} />
+                <Ionicons name="sync-outline" size={22} color={colors.primary} />
               </Pressable>
             </View>
             <BackEditor
@@ -300,10 +307,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
+  topIcon: {
+    width: 44,
+    height: 44,
   },
   pressed: {
     opacity: 0.6,
@@ -370,6 +376,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     paddingVertical: 6,
+  },
+  nameInputEmergency: {
+    color: EMERGENCY_COLOR,
   },
   backIcon: {
     width: 26,

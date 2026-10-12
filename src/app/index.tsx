@@ -18,28 +18,37 @@ import { CardStackItem } from '@/components/card-stack-item';
 import { colors } from '@/constants/colors';
 import { useCards } from '@/hooks/use-cards';
 import { signOut } from '@/services/auth';
-import { matchesQuery, sortCardsByName } from '@/utils/cards';
+import {
+  EMERGENCY_COLOR,
+  isEmergencyCard,
+  matchesQuery,
+  sortCardsByName,
+} from '@/utils/cards';
 
 const STACK_STEP = 40;
 const CARD_ASPECT_RATIO = 1.2;
 
 export default function HomeScreen() {
-  const { cards, createNewCard, toggleFavorite } = useCards();
+  const { cards, hydrated, createNewCard, createEmergencyCard, toggleFavorite } = useCards();
   const { width: windowWidth } = useWindowDimensions();
   const [query, setQuery] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   const cardWidth = windowWidth - 28;
   const cardHeight = cardWidth * CARD_ASPECT_RATIO;
 
-  const visibleCards = useMemo(
-    () =>
-      sortCardsByName(cards).filter(
-        (card) => matchesQuery(card, query) && (!favoritesOnly || card.favorite),
-      ),
-    [cards, query, favoritesOnly],
-  );
+  const showEmergencyBanner = hydrated && cards.length === 0 && !bannerDismissed;
+
+  const visibleCards = useMemo(() => {
+    const filtered = sortCardsByName(cards).filter(
+      (card) => matchesQuery(card, query) && (!favoritesOnly || card.favorite),
+    );
+    const emergency = filtered.filter(isEmergencyCard);
+    const normal = filtered.filter((card) => !isEmergencyCard(card));
+    return [...normal, ...emergency];
+  }, [cards, query, favoritesOnly]);
 
   const stackHeight =
     visibleCards.length > 0
@@ -48,6 +57,11 @@ export default function HomeScreen() {
 
   function handleCreateCard() {
     const card = createNewCard();
+    router.push({ pathname: '/card/[id]', params: { id: card.id } });
+  }
+
+  function handleCreateEmergencyCard() {
+    const card = createEmergencyCard();
     router.push({ pathname: '/card/[id]', params: { id: card.id } });
   }
 
@@ -86,7 +100,7 @@ export default function HomeScreen() {
           hitSlop={8}
           style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
         >
-          <Ionicons name="log-out-outline" size={24} color={colors.textMuted} />
+          <Ionicons name="log-out-outline" size={24} color={colors.primary} />
         </Pressable>
         <Image
           source={require('../../assets/images/Axei.png')}
@@ -94,7 +108,22 @@ export default function HomeScreen() {
           contentFit="contain"
           accessibilityLabel="Ícone do Axei"
         />
-        <View style={styles.headerButton} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            favoritesOnly ? 'Mostrar todos os cartões' : 'Mostrar somente favoritos'
+          }
+          accessibilityState={{ selected: favoritesOnly }}
+          onPress={() => setFavoritesOnly((current) => !current)}
+          hitSlop={8}
+          style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+        >
+          <Ionicons
+            name={favoritesOnly ? 'star' : 'star-outline'}
+            size={26}
+            color={favoritesOnly ? colors.favorite : colors.primary}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.searchRow}>
@@ -115,33 +144,43 @@ export default function HomeScreen() {
             </Pressable>
           ) : null}
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            favoritesOnly ? 'Mostrar todos os cartões' : 'Mostrar somente favoritos'
-          }
-          accessibilityState={{ selected: favoritesOnly }}
-          onPress={() => setFavoritesOnly((current) => !current)}
-          hitSlop={8}
-          style={({ pressed }) => [styles.favoritesButton, pressed && styles.pressed]}
-        >
-          <Ionicons
-            name={favoritesOnly ? 'star' : 'star-outline'}
-            size={24}
-            color={favoritesOnly ? colors.primary : colors.textMuted}
-          />
-        </Pressable>
       </View>
 
-      {visibleCards.length === 0 ? (
+      {!hydrated ? null : visibleCards.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>
-            {cards.length === 0
-              ? 'Toque em + para criar seu primeiro cartão.'
-              : favoritesOnly
-                ? 'Nenhum cartão favorito ainda. Toque na estrela de um cartão para favoritar.'
-                : 'Nenhum cartão encontrado.'}
-          </Text>
+          {showEmergencyBanner ? (
+            <View style={styles.banner}>
+              <Text style={styles.bannerTitle}>Cartão de emergência</Text>
+              <Text style={styles.bannerText}>
+                Criar um cartão com os principais números de emergência (190, 192, 193, 199, 191,
+                180 e 100)?
+              </Text>
+              <View style={styles.bannerActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={handleCreateEmergencyCard}
+                  style={({ pressed }) => [styles.bannerButton, styles.bannerConfirm, pressed && styles.pressed]}
+                >
+                  <Text style={styles.bannerConfirmText}>Criar</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setBannerDismissed(true)}
+                  style={({ pressed }) => [styles.bannerButton, styles.bannerCancel, pressed && styles.pressed]}
+                >
+                  <Text style={styles.bannerCancelText}>Agora não</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              {cards.length === 0
+                ? 'Toque em + para criar seu primeiro cartão.'
+                : favoritesOnly
+                  ? 'Nenhum cartão favorito ainda. Toque na estrela de um cartão para favoritar.'
+                  : 'Nenhum cartão encontrado.'}
+            </Text>
+          )}
         </View>
       ) : (
         <ScrollView
@@ -199,8 +238,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   appIcon: {
-    width: 40,
-    height: 40,
+    width: 56,
+    height: 56,
   },
   pressed: {
     opacity: 0.6,
@@ -219,16 +258,6 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  favoritesButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderRadius: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -257,6 +286,63 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  banner: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: EMERGENCY_COLOR,
+    backgroundColor: colors.surface,
+    padding: 16,
+    gap: 8,
+    elevation: 3,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  bannerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: EMERGENCY_COLOR,
+    textAlign: 'center',
+  },
+  bannerText: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  bannerActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  bannerButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerConfirm: {
+    backgroundColor: EMERGENCY_COLOR,
+  },
+  bannerConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  bannerCancel: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  bannerCancelText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',

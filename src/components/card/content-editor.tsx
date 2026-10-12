@@ -47,6 +47,7 @@ export function ContentEditor({ content, editorRef, onChange }: ContentEditorPro
       pasteAsPlainText
       placeholder="Escreva aqui o conteúdo da frente do cartão"
       style={{ flex: 1, minHeight: 220, backgroundColor: 'transparent' }}
+      useContainer={false}
     />
   );
 }

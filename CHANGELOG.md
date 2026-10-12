@@ -34,11 +34,11 @@
 | 2.4 Frente: editor | CONCLUÍDA | Mini editor rico WYSIWYG (`react-native-pell-rich-editor` + `react-native-webview`); barra na base da frente, **dentro do cartão** (gira com a rotação 3D, na mesma posição da barra do verso), conforme `especificacao_mini_editor.md`: Aa (Título/Subtítulo), B, listas/checklist, cor (6), ↶ (desfazer) — sem itálico e sem refazer, para abrir espaço; tabela 2×2 pelo botão ▦ (+ linha, + coluna); ícone salvar no canto superior esquerdo. |
 | 2.5 Verso: mídias | CONCLUÍDA | Notas, fotos (**câmera ou galeria**, uma ou mais por cartão) e áudios (gravação/reprodução com `expo-audio`); botões coloridos na barra; durante a gravação o botão vermelho ocupa toda a largura da barra; arquivos em `documentDirectory` (`card-files/` para fotos); remoção apaga o arquivo. |
 | 2.6 Dados/sync/offline | PARCIAL | Cache local (`expo-sqlite` — `cards`/`outbox`/`meta`), salvamento automático (debounce 800ms), push/pull por `uid` com fila offline e retry de 45s, upload de fotos/áudios ao bucket `card-media` com cache local e download sob demanda, reconciliação de exclusões. **SQL aplicado no painel e sync validada em dispositivo (12/10/2026).** Pendências: testar offline, 2 aparelhos e upload de mídia nova. |
-| 2.7 Busca/favoritos/vazios | PARCIAL | Busca por nome e conteúdo da frente, filtro de favoritos e estados vazios funcionando na tela principal. Falta: banner do cartão de emergência. |
+| 2.7 Busca/favoritos/vazios | PARCIAL | Busca por nome e conteúdo da frente, filtro de favoritos e estados vazios funcionando na tela principal. Banner do cartão de emergência **implementado** (decisões de 12/10/2026). Falta: teste em dispositivo. |
 | 2.8 Exclusão/integridade | PARCIAL | Exclusão com confirmação funcionando. Falta: arquivos órfãos de cartão excluído e isolamento por usuário (depende da 2.6). |
 | 2.9 Testes integrados | NÃO INICIADA | Bateria final em dispositivo; testes em dispositivo das subetapas 2.2–2.5 ainda pendentes. |
 
-**Cartão de emergência:** conteúdo validado pelo usuário (190, 192, 193, 199, 191, 180, 100); banner de criação automática será implementado na 2.7.
+**Cartão de emergência:** conteúdo validado pelo usuário (190, 192, 193, 199, 191, 180, 100). Regras decididas em 12/10/2026: banner sempre que não houver cartões (volta a perguntar se apagar todos); nome **vermelho** na pilha e no editor; **sempre por último** na pilha (inclusive em busca/favoritos); **somente ele** exibe o conteúdo da frente na pilha; id fixo `emergency` (sem SQL novo).
 
 ## Etapa 3 — Builds e distribuição — **NÃO INICIADA**
 

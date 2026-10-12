@@ -65,7 +65,7 @@ export function TableBlock({ editorRef }: { editorRef: RefObject<RichEditor | nu
 const styles = StyleSheet.create({
   container: { position: 'relative', zIndex: 3 },
   button: {
-    width: 54, height: 54, marginTop: 12, marginLeft: 8,
+    width: 42, height: 48, marginTop: 12, marginLeft: 8,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: TABLE_COLOR, borderRadius: 8,
     backgroundColor: TABLE_SURFACE,

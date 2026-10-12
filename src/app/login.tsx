@@ -78,7 +78,6 @@ export default function LoginScreen() {
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.title}>Axei</Text>
         <Text style={styles.subtitle}>Entre para acessar seus cartões</Text>
       </View>
 
@@ -136,11 +135,6 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     marginBottom: 4,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: colors.text,
   },
   subtitle: {
     fontSize: 15,

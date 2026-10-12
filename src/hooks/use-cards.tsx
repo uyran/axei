@@ -20,14 +20,16 @@ import {
 } from '@/services/db';
 import { syncWithRemote } from '@/services/sync';
 import type { BackItem, Card } from '@/types/card';
-import { createCard } from '@/utils/cards';
+import { createCard, createEmergencyCard } from '@/utils/cards';
 
 const PERSIST_DEBOUNCE_MS = 800;
 const RETRY_INTERVAL_MS = 45_000;
 
 type CardsContextValue = {
   cards: Card[];
+  hydrated: boolean;
   createNewCard: () => Card;
+  createEmergencyCard: () => Card;
   getCard: (id: string) => Card | undefined;
   setCardName: (id: string, name: string) => void;
   setCardFront: (id: string, front: string) => void;
@@ -40,6 +42,7 @@ const CardsContext = createContext<CardsContextValue | null>(null);
 
 export function CardsProvider({ children }: { children: ReactNode }) {
   const [cards, setCards] = useState<Card[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const cardsRef = useRef<Card[]>(cards);
   const userIdRef = useRef<string | null>(null);
   const persistTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -140,12 +143,17 @@ export function CardsProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     const hydrateForUser = (userId: string | null) => {
+      const previousUserId = userIdRef.current;
       userIdRef.current = userId;
+      if (previousUserId !== userId) {
+        setHydrated(false);
+      }
       persistTimers.current.forEach((timer) => clearTimeout(timer));
       persistTimers.current.clear();
       if (!userId) {
         cardsRef.current = [];
         setCards([]);
+        setHydrated(true);
         return;
       }
       void loadCardsLocal(userId)
@@ -155,10 +163,14 @@ export function CardsProvider({ children }: { children: ReactNode }) {
           }
           cardsRef.current = local;
           setCards(local);
-          void runSync();
         })
         .catch(() => {
           // Sem cache local: começa vazio e tenta baixar do servidor.
+        })
+        .finally(() => {
+          if (active) {
+            setHydrated(true);
+          }
           void runSync();
         });
     };
@@ -197,20 +209,30 @@ export function CardsProvider({ children }: { children: ReactNode }) {
     };
   }, [runSync]);
 
+  const addCard = useCallback(
+    (card: Card): Card => {
+      cardsRef.current = [...cardsRef.current, card];
+      setCards((current) => [...current, card]);
+      const userId = userIdRef.current;
+      if (userId) {
+        void serialize(() => saveCardLocal(userId, card))
+          .then(() => runSync())
+          .catch(() => {
+            // Fica pendente até a próxima edição ou retry.
+          });
+      }
+      return card;
+    },
+    [runSync],
+  );
+
   const createNewCard = useCallback((): Card => {
-    const card = createCard();
-    cardsRef.current = [...cardsRef.current, card];
-    setCards((current) => [...current, card]);
-    const userId = userIdRef.current;
-    if (userId) {
-      void serialize(() => saveCardLocal(userId, card))
-        .then(() => runSync())
-        .catch(() => {
-          // Fica pendente até a próxima edição ou retry.
-        });
-    }
-    return card;
-  }, [runSync]);
+    return addCard(createCard());
+  }, [addCard]);
+
+  const createEmergency = useCallback((): Card => {
+    return addCard(createEmergencyCard());
+  }, [addCard]);
 
   const getCard = useCallback(
     (id: string) => cards.find((card) => card.id === id),
@@ -279,7 +301,9 @@ export function CardsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       cards,
+      hydrated,
       createNewCard,
+      createEmergencyCard: createEmergency,
       getCard,
       setCardName,
       setCardFront,
@@ -289,7 +313,9 @@ export function CardsProvider({ children }: { children: ReactNode }) {
     }),
     [
       cards,
+      hydrated,
       createNewCard,
+      createEmergency,
       getCard,
       setCardName,
       setCardFront,
