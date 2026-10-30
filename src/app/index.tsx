@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  type GestureResponderEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -35,6 +37,43 @@ export default function HomeScreen() {
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  const shuffleTouchStartY = useRef<number | null>(null);
+  const shuffleTriggered = useRef(false);
+  const shuffleJustHappened = useRef(false);
+
+  function handleStackTouchStart(event: GestureResponderEvent) {
+    shuffleTouchStartY.current = event.nativeEvent.pageY;
+    shuffleTriggered.current = false;
+    shuffleJustHappened.current = false;
+  }
+
+  function handleStackTouchMove(event: GestureResponderEvent) {
+    if (shuffleTriggered.current || shuffleTouchStartY.current == null) {
+      return;
+    }
+    const dy = event.nativeEvent.pageY - shuffleTouchStartY.current;
+    if (dy > 64) {
+      shuffleTriggered.current = true;
+      shuffleJustHappened.current = true;
+      setShuffleSeed((seed) => seed + 1);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch((error) => {
+        console.log('[haptics] falha ao vibrar', error);
+      });
+    }
+  }
+
+  function handleStackTouchEnd() {
+    shuffleTouchStartY.current = null;
+  }
+
+  function handleOpenCard(id: string) {
+    if (shuffleJustHappened.current) {
+      shuffleJustHappened.current = false;
+      return;
+    }
+    router.push({ pathname: '/card/[id]', params: { id } });
+  }
 
   const cardWidth = windowWidth - 28;
   const cardHeight = cardWidth * CARD_ASPECT_RATIO;
@@ -187,6 +226,9 @@ export default function HomeScreen() {
           style={styles.stackScroll}
           contentContainerStyle={{ height: stackHeight + 24 }}
           showsVerticalScrollIndicator={false}
+          onTouchStart={handleStackTouchStart}
+          onTouchMove={handleStackTouchMove}
+          onTouchEnd={handleStackTouchEnd}
         >
           <View style={[styles.stack, { height: stackHeight }]}>
             {visibleCards.map((card, index) => (
@@ -197,9 +239,8 @@ export default function HomeScreen() {
                 height={cardHeight}
                 top={index * STACK_STEP}
                 zIndex={index}
-                onPress={() =>
-                  router.push({ pathname: '/card/[id]', params: { id: card.id } })
-                }
+                shuffleSeed={shuffleSeed}
+                onPress={() => handleOpenCard(card.id)}
                 onToggleFavorite={() => toggleFavorite(card.id)}
               />
             ))}

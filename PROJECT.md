@@ -71,13 +71,13 @@ O acesso é individual por usuário; os dados ficam protegidos por conta, com si
 **Frente do cartão — mini editor rico WYSIWYG** (`react-native-pell-rich-editor` + `react-native-webview`, barra idêntica a `especificacao_mini_editor.md`, aprovada em 11/10/2026):
 
 - Conteúdo salvo como **string HTML** (`Card.front`).
-- Barra de formatação **dentro do cartão, na base da frente** (mesma posição da barra do verso; gira junto com a rotação 3D): **Aa** (Título/Subtítulo) · **B** · **☷** listas (marcadores, numerada, checklist) · **A** cor (6 cores) · **↶** (desfazer).
+- Barra de formatação **no rodapé da tela, fora do cartão, apenas com a frente visível**: **Aa** (Título/Subtítulo) · **B** · **I** · **☷** listas (marcadores, numerada, checklist) · **A** cor (6 cores) · **↶ ↷** (desfazer/refazer).
 - Botão **▦** à parte: Nova tabela 2×2, + Linha, + Coluna.
 - Ícone de **salvar** no canto superior esquerdo da frente (recolhe teclado); favorito só na tela principal.
 
-**Verso do cartão — barra inferior com:** Nota (caixa de texto multilinha), Foto (escolha entre **tirar uma foto com a câmera do próprio celular** ou selecionar da galeria; o app permite **uma ou mais fotos** por cartão) e Gravar (áudio com duração ao vivo; **enquanto grava, o botão vermelho ocupa toda a largura da barra** com o tempo decorrido, voltando ao normal ao parar). Botões coloridos (ícone e fundo). Áudios gravados direto no diretório de fotos copiadas para `documentDirectory/card-files/`; remover um item apaga o arquivo físico. Permissões negadas tratadas com Alert.
+**Verso do cartão — barra inferior com:** Nota (caixa de texto multilinha), Foto (galeria, sem câmera) e Gravar (áudio com duração ao vivo). Áudios gravados direto no diretório de documentos; fotos copiadas para `documentDirectory/card-files/`; remover um item apaga o arquivo físico. Permissões negadas tratadas com Alert.
 
-**Cartão de emergência (Etapa 2.7):** sempre que o usuário não tiver **nenhum** cartão (primeira abertura ou depois de apagar todos), um banner na área vazia pergunta se deseja criá-lo automaticamente (botões **Criar** / **Agora não** — "Agora não" esconde até o próximo lançamento); se aceitar, cartão `Emergência` (id fixo `emergency`, sem SQL novo) com o conteúdo abaixo na frente. **Regras:** nome **vermelho** na pilha e no editor; **sempre exibido por último** na pilha (inclusive em busca/favoritos); **somente ele** mostra o conteúdo da frente como texto na pilha (os demais cartões continuam só com a faixa de nome); participa normalmente de busca e favoritos.
+**Cartão de emergência (Etapa 2.7):** na primeira abertura ou quando não houver cartões, banner perguntando se o usuário deseja criá-lo; se aceitar, cartão `Emergência` com o conteúdo abaixo na frente:
 
 ```
 190 – Polícia Militar
@@ -96,7 +96,9 @@ O acesso é individual por usuário; os dados ficam protegidos por conta, com si
 | Etapa | Status | Resumo |
 |---|---|---|
 | 1 — Login e autenticação | **PENDENTE** | E-mail/senha, sessão, rotas e recuperação **aprovados em dispositivo** (iPhone e Android). Única pendência: **login Google não funciona no Expo Go** (deep link `exp://` do retorno OAuth não é capturado; código pronto, revisão no build nativo da Etapa 3 com scheme `axei://`). |
+
 | 2 — Cartões e funcionamento | **EM ANDAMENTO** | Ver subetapas abaixo. |
+
 | 3 — Builds e distribuição | NÃO INICIADA | Revisar identificadores, permissões e RLS; builds de teste; login Google em build nativo; Skia (se adotado); publicação sob autorização específica. |
 
 ### Etapa 2 — subetapas
@@ -104,13 +106,21 @@ O acesso é individual por usuário; os dados ficam protegidos por conta, com si
 | Sub | Status | Resumo |
 |---|---|---|
 | 2.1 Tela principal e pilha | CONCLUÍDA | Especificação validada pelo usuário em 11/10/2026. |
+
 | 2.2 Modelo e regras de negócio | CONCLUÍDA | Modelo `Card` em `src/types/card.ts` (frente: string HTML; verso: `BackItem[]`); ordenação, descarte e nome provisório implementados. Teste em dispositivo pendente junto com 2.9. |
+
 | 2.3 Criação, abertura, edição e rotação | CONCLUÍDA | Botão `+`, abertura em edição, pilha, favoritos, rotação 3D. Teste em dispositivo pendente junto com 2.9. |
-| 2.4 Frente: editor e formatação | CONCLUÍDA | Mini editor rico WYSIWYG (pell + WebView) com barra conforme `especificacao_mini_editor.md` (A+/A− removidos); `Card.front` como HTML; tabela pelo botão ▦ (+ linha, + coluna). Teste em dispositivo pendente junto com 2.9. |
+
+| 2.4 Frente: editor e formatação | CONCLUÍDA | Mini editor rico WYSIWYG (pell + WebView) com barra conforme `especificacao_mini_editor.md` (A+/A− removidos); `Card.front` como HTML. Teste em dispositivo pendente junto com 2.9. |
+
 | 2.5 Verso: anotações, fotos e áudio | CONCLUÍDA | Notas, fotos (galeria) e áudio (gravação/reprodução); arquivos em `documentDirectory`. Teste em dispositivo pendente junto com 2.9. Sync com Storage fica na 2.6. |
-| 2.6 Dados, sincronização e offline | PARCIAL | Cache local (`expo-sqlite`), salvamento automático, push/pull por `uid` com fila offline e retry, upload de mídia ao bucket `card-media` com cache local. **SQL aplicado no painel e sync validada em dispositivo (12/10/2026).** Pendências para fechar: testar modo offline (fila sem rede), sync entre 2 aparelhos e confirmação de upload de mídia nova no bucket. |
-| 2.7 Busca, favoritos e estados vazios | PARCIAL | Busca, filtro de favoritos e estados vazios funcionam na tela principal. **Banner do cartão de emergência implementado (regras decididas com o usuário em 12/10/2026, ver seção 4).** Falta: teste em dispositivo. |
+
+| 2.6 Dados, sincronização e offline | NÃO INICIADA | PostgreSQL + RLS por usuário, cartões por `uid`, cache local + fila de sincronização (Supabase não tem offline automático), Storage para fotos/áudios, salvamento automático, erros de rede. **Aguardando autorização.** |
+
+| 2.7 Busca, favoritos e estados vazios | PARCIAL | Busca, filtro de favoritos e estados vazios da pilha já funcionam na tela principal. Falta: banner do cartão de emergência e testes. |
+
 | 2.8 Exclusão e integridade | PARCIAL | Exclusão com confirmação já existe. Falta: tratar arquivos órfãos (foto/áudio de cartão excluído) e testar isolamento por usuário (depende da 2.6). |
+
 | 2.9 Testes integrados e encerramento | NÃO INICIADA | Bateria final em dispositivo (criação, edição, rotação, favoritos, ordenação, busca, exclusão, editor, checklist, tabela, mídias, offline) + correções + encerramento da etapa. |
 
 ### Regras de encerramento

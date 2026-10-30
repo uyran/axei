@@ -1,5 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { CardBackground } from '@/components/card-background';
 import { colors } from '@/constants/colors';
@@ -12,6 +20,7 @@ type CardStackItemProps = {
   height: number;
   top: number;
   zIndex: number;
+  shuffleSeed?: number;
   onPress: () => void;
   onToggleFavorite: () => void;
 };
@@ -30,22 +39,47 @@ export function CardStackItem({
   height,
   top,
   zIndex,
+  shuffleSeed = 0,
   onPress,
   onToggleFavorite,
 }: CardStackItemProps) {
   const emergency = isEmergencyCard(card);
+  const shuffleX = useSharedValue(0);
+  const shuffleRotate = useSharedValue(0);
+
+  useEffect(() => {
+    if (!shuffleSeed) {
+      return;
+    }
+    const direction = Math.random() < 0.5 ? -1 : 1;
+    const distance = direction * (50 + Math.random() * 80);
+    const angle = direction * (4 + Math.random() * 8);
+    shuffleX.value = withSequence(
+      withTiming(distance, { duration: 240, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 400, easing: Easing.inOut(Easing.quad) }),
+    );
+    shuffleRotate.value = withSequence(
+      withTiming(angle, { duration: 240, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 400, easing: Easing.inOut(Easing.quad) }),
+    );
+  }, [shuffleSeed, shuffleX, shuffleRotate]);
+
+  const shuffleStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: shuffleX.value },
+      { perspective: 1000 },
+      { rotate: `${shuffleRotate.value}deg` },
+    ],
+  }));
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Abrir cartão ${displayCardName(card)}`}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        { width, height, top, zIndex },
-        pressed && styles.pressed,
-      ]}
-    >
+    <Animated.View style={[styles.cardSlot, { top, zIndex }, shuffleStyle]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Abrir cartão ${displayCardName(card)}`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.card, { width, height }, pressed && styles.pressed]}
+      >
       <CardBackground seed={card.backgroundSeed} />
       <View style={styles.strip}>
         <Pressable
@@ -81,17 +115,20 @@ export function CardStackItem({
         >
           <Text style={styles.frontPreview}>{previewText(card.front)}</Text>
         </ScrollView>
-      ) : null}
-    </Pressable>
+        ) : null}
+      </Pressable>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  cardSlot: {
     position: 'absolute',
     left: 0,
     right: 0,
     marginHorizontal: 14,
+  },
+  card: {
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,

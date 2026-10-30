@@ -1,3 +1,9 @@
+import {
+  argbFromHex,
+  hexFromArgb,
+  themeFromSourceColor,
+} from '@material/material-color-utilities';
+import { LinearGradient } from 'expo-linear-gradient';
 import { memo, useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
@@ -32,17 +38,10 @@ type Shape =
       opacity: number;
     };
 
-const GLASS_PALETTE = [
-  '#7DD3FC',
-  '#A5B4FC',
-  '#C4B5FD',
-  '#F9A8D4',
-  '#FCD34D',
-  '#6EE7B7',
-  '#FDBA74',
-  '#93C5FD',
-  '#FCA5A5',
-];
+type CardBackgroundData = {
+  gradientColors: [string, string];
+  shapes: Shape[];
+};
 
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
@@ -55,14 +54,69 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function generateShapes(seed: number): Shape[] {
+function hslToHex(h: number, s: number, l: number): string {
+  const saturation = s / 100;
+  const lightness = l / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const sector = h / 60;
+  const x = chroma * (1 - Math.abs((sector % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (sector < 1) {
+    r = chroma;
+    g = x;
+  } else if (sector < 2) {
+    r = x;
+    g = chroma;
+  } else if (sector < 3) {
+    g = chroma;
+    b = x;
+  } else if (sector < 4) {
+    g = x;
+    b = chroma;
+  } else if (sector < 5) {
+    r = x;
+    b = chroma;
+  } else {
+    r = chroma;
+    b = x;
+  }
+  const m = lightness - chroma / 2;
+  const toHex = (value: number) =>
+    Math.round((value + m) * 255)
+      .toString(16)
+      .padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function generateBackground(seed: number): CardBackgroundData {
   const random = mulberry32(seed);
+
+  const hue = random() * 360;
+  const saturation = 45 + random() * 25;
+  const lightness = 38 + random() * 12;
+  const sourceHex = hslToHex(hue, saturation, lightness);
+  const theme = themeFromSourceColor(argbFromHex(sourceHex));
+
+  const gradientColors: [string, string] = [
+    hexFromArgb(theme.palettes.primary.tone(80)),
+    hexFromArgb(theme.palettes.primary.tone(94)),
+  ];
+
+  const shapeColors = [
+    hexFromArgb(theme.palettes.primary.tone(45)),
+    hexFromArgb(theme.palettes.secondary.tone(50)),
+    hexFromArgb(theme.palettes.tertiary.tone(50)),
+    '#FFFFFF',
+  ];
+
   const count = 6 + Math.floor(random() * 4);
   const shapes: Shape[] = [];
 
   for (let index = 0; index < count; index += 1) {
-    const color = GLASS_PALETTE[Math.floor(random() * GLASS_PALETTE.length)];
-    const opacity = 0.14 + random() * 0.16;
+    const color = shapeColors[Math.floor(random() * shapeColors.length)];
+    const opacity = 0.1 + random() * 0.12;
     const kind = random();
     const left = random() * 0.75;
     const top = random() * 0.75;
@@ -102,7 +156,7 @@ function generateShapes(seed: number): Shape[] {
     }
   }
 
-  return shapes;
+  return { gradientColors, shapes };
 }
 
 type CardBackgroundProps = {
@@ -114,10 +168,16 @@ export const CardBackground = memo(function CardBackground({
   seed,
   style,
 }: CardBackgroundProps) {
-  const shapes = useMemo(() => generateShapes(seed), [seed]);
+  const { gradientColors, shapes } = useMemo(() => generateBackground(seed), [seed]);
 
   return (
     <View style={[styles.base, style]} pointerEvents="none">
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       {shapes.map((shape, index) => {
         if (shape.kind === 'circle') {
           return (
@@ -183,7 +243,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
   },
   glassSheen: {
@@ -192,7 +251,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.55)',
     borderRadius: 18,
