@@ -65,20 +65,49 @@ export function CardStackItem({
     const baseAngle = 4 + Math.random() * 8;
 
     if (shuffleAxis === 'x') {
-      const distance = direction * width * (0.08 + Math.random() * 0.07);
-      const offsetY = (Math.random() - 0.5) * 16;
+      const distance = direction * Math.min(width * (0.12 + Math.random() * 0.06), 90);
+      const offsetsX = [
+        distance,
+        -distance * (0.35 + Math.random() * 0.3),
+        distance * (0.2 + Math.random() * 0.35),
+        -distance * Math.random() * 0.2,
+        0,
+      ];
+      const offsetsY = [
+        (Math.random() - 0.5) * 16,
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 6,
+        0,
+      ];
       const angle = direction * (2 + Math.random() * 2);
+      const offsetsRotate = [
+        angle,
+        -angle * (0.35 + Math.random() * 0.3),
+        angle * (0.2 + Math.random() * 0.35),
+        -angle * Math.random() * 0.2,
+        0,
+      ];
       shuffleX.value = withSequence(
-        withTiming(distance, { duration: 320, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsX[0], { duration: 130, easing: Easing.out(Easing.quad) }),
+        withTiming(offsetsX[1], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsX[2], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsX[3], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsX[4], { duration: 170, easing: Easing.inOut(Easing.quad) }),
       );
       shuffleY.value = withSequence(
-        withTiming(offsetY, { duration: 320, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsY[0], { duration: 130, easing: Easing.out(Easing.quad) }),
+        withTiming(offsetsY[1], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsY[2], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsY[3], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsY[4], { duration: 170, easing: Easing.inOut(Easing.quad) }),
       );
       shuffleRotate.value = withSequence(
-        withTiming(angle, { duration: 320, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsRotate[0], { duration: 130, easing: Easing.out(Easing.quad) }),
+        withTiming(offsetsRotate[1], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsRotate[2], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsRotate[3], { duration: 130, easing: Easing.inOut(Easing.quad) }),
+        withTiming(offsetsRotate[4], { duration: 170, easing: Easing.inOut(Easing.quad) }),
       );
     } else {
       const distance = direction * baseDistance * intensity;

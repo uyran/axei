@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, useColorScheme, View } from 'react-native';
 
 import { colors } from '@/constants/colors';
+import { AppSoundProvider } from '@/hooks/use-app-sound';
 import { useAuth } from '@/hooks/use-auth';
 import { CardsProvider } from '@/hooks/use-cards';
 
@@ -39,16 +40,18 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <CardsProvider>
-        <StatusBar style="auto" />
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ title: 'Entrar' }} />
-          <Stack.Screen name="signup" options={{ title: 'Criar conta' }} />
-          <Stack.Screen name="recover" options={{ title: 'Recuperar senha' }} />
-          <Stack.Screen name="card/[id]" options={{ headerShown: false }} />
-        </Stack>
-      </CardsProvider>
+      <AppSoundProvider>
+        <CardsProvider>
+          <StatusBar style="auto" />
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ title: 'Entrar' }} />
+            <Stack.Screen name="signup" options={{ title: 'Criar conta' }} />
+            <Stack.Screen name="recover" options={{ title: 'Recuperar senha' }} />
+            <Stack.Screen name="card/[id]" options={{ headerShown: false }} />
+          </Stack>
+        </CardsProvider>
+      </AppSoundProvider>
     </ThemeProvider>
   );
 }

@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CardStackItem } from '@/components/card-stack-item';
 import { colors } from '@/constants/colors';
+import { useAppSound } from '@/hooks/use-app-sound';
 import { useCards } from '@/hooks/use-cards';
 import { signOut } from '@/services/auth';
 import { isEmergencyCard, matchesQuery, sortCardsByName } from '@/utils/cards';
@@ -28,6 +29,7 @@ const CARD_ASPECT_RATIO = 1.2;
 
 export default function HomeScreen() {
   const { cards, hydrated, createNewCard, toggleFavorite } = useCards();
+  const { soundsEnabled, toggleSounds } = useAppSound();
   const { width: windowWidth } = useWindowDimensions();
   const [query, setQuery] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -46,13 +48,16 @@ export default function HomeScreen() {
   const [selectedSoundUri, setSelectedSoundUri] = useState<any>(null);
   const soundGestureUri = require('../../assets/sounds/sound4.mp3');
   const soundSelectUri = require('../../assets/sounds/sound1.mp3');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   function playGestureSound() {
+    if (!soundsEnabled) return;
     setSelectedSoundUri(soundGestureUri);
     setSoundKey((k) => k + 1);
   }
 
   function playSelectSound() {
+    if (!soundsEnabled) return;
     setSelectedSoundUri(soundSelectUri);
     setSoundKey((k) => k + 1);
   }
@@ -160,13 +165,13 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Sair da conta"
-          onPress={handleSignOut}
-          disabled={signingOut}
+          accessibilityLabel={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+          accessibilityState={{ expanded: isMenuOpen }}
+          onPress={() => setIsMenuOpen((open) => !open)}
           hitSlop={8}
           style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
         >
-          <Ionicons name="log-out-outline" size={24} color={colors.primary} />
+          <Ionicons name="ellipsis-horizontal" size={24} color={colors.primary} />
         </Pressable>
         <Image
           source={require('../../assets/images/Axei.png')}
@@ -193,22 +198,24 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.searchRow}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Pesquisar cartões"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            accessibilityLabel="Pesquisar cartões"
-          />
-          {query !== '' ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Limpar pesquisa">
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
+        <View style={styles.searchBarFrame}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color={colors.primary} />
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Pesquisar cartões"
+              placeholderTextColor={colors.textMuted}
+              autoCorrect={false}
+              accessibilityLabel="Pesquisar cartões"
+            />
+            {query !== '' ? (
+              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Limpar pesquisa">
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -261,17 +268,58 @@ export default function HomeScreen() {
         <Ionicons name="add" size={30} color={colors.onPrimary} />
       </Pressable>
       {selectedSoundUri && (
-        <SoundPlayer uri={selectedSoundUri} key={soundKey} />
+        <SoundPlayer uri={selectedSoundUri} key={soundKey} enabled={soundsEnabled} />
       )}
+      {isMenuOpen ? (
+        <View style={styles.menuOverlay}>
+          <Pressable
+            accessibilityLabel="Fechar menu"
+            onPress={() => setIsMenuOpen(false)}
+            style={StyleSheet.absoluteFill}
+          />
+          <View accessibilityLabel="Menu do aplicativo" style={styles.appMenu}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={soundsEnabled ? 'Desativar sons do aplicativo' : 'Ativar sons do aplicativo'}
+              onPress={toggleSounds}
+              style={({ pressed }) => [styles.appMenuItem, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={soundsEnabled ? 'volume-mute-outline' : 'volume-high-outline'}
+                size={22}
+                color={colors.primary}
+              />
+              <Text style={styles.appMenuText}>{soundsEnabled ? 'Desativar sons' : 'Ativar sons'}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sair da conta"
+              onPress={() => {
+                setIsMenuOpen(false);
+                handleSignOut();
+              }}
+              disabled={signingOut}
+              style={({ pressed }) => [styles.appMenuItem, pressed && styles.pressed]}
+            >
+              <Ionicons name="log-out-outline" size={22} color={colors.primary} />
+              <Text style={styles.appMenuText}>Sair da conta</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function SoundPlayer({ uri }: { uri: any }) {
+function SoundPlayer({ uri, enabled }: { uri: any; enabled: boolean }) {
   const sound = useAudioPlayer(uri);
   useEffect(() => {
-    void sound.play();
-  }, [sound]);
+    if (enabled) {
+      void sound.play();
+    } else {
+      sound.pause();
+    }
+  }, [sound, enabled]);
   return null;
 }
 
@@ -293,6 +341,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  menuOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 10,
+  },
+  appMenu: {
+    position: 'absolute',
+    top: 56,
+    left: 16,
+    minWidth: 204,
+    overflow: 'hidden',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    elevation: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+  },
+  appMenuItem: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+  },
+  appMenuText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
   appIcon: {
     width: 56,
     height: 56,
@@ -307,17 +387,27 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 10,
   },
-  searchBar: {
+  searchBarFrame: {
     flex: 1,
+    borderRadius: 14,
+    paddingBottom: 5,
+    backgroundColor: '#145DA0',
+    elevation: 5,
+    shadowColor: '#0B3D69',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 12,
     minHeight: 42,
     borderRadius: 12,
-    backgroundColor: '#c0def3',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#DCEEFF',
   },
   searchInput: {
     flex: 1,

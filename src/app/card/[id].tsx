@@ -26,8 +26,8 @@ import { CardBackground } from '@/components/card-background';
 import { BackEditor } from '@/components/card/back-editor';
 import { ContentEditor } from '@/components/card/content-editor';
 import { FormattingToolbar } from '@/components/card/formatting-toolbar';
-import { TableBlock } from '@/components/card/table-block';
 import { colors } from '@/constants/colors';
+import { useAppSound } from '@/hooks/use-app-sound';
 import { useCards } from '@/hooks/use-cards';
 import {
   CARD_PLACEHOLDER_NAME,
@@ -43,6 +43,7 @@ export default function CardDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const { getCard, setCardName, setCardFront, setCardBack, deleteCard } = useCards();
+  const { soundsEnabled } = useAppSound();
 
   const card = getCard(id);
   const [nameSelection, setNameSelection] = useState<{ start: number; end: number } | undefined>(
@@ -205,7 +206,7 @@ export default function CardDetailScreen() {
           hitSlop={8}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
         >
-          <Ionicons name="ellipsis-horizontal" size={24} color={colors.primary} />
+          <Ionicons name="trash-outline" size={24} color={colors.primary} />
         </Pressable>
       </View>
 
@@ -257,7 +258,6 @@ export default function CardDetailScreen() {
             </View>
             <View style={styles.tools}>
               <FormattingToolbar editorRef={editorRef} />
-              <TableBlock editorRef={editorRef} />
             </View>
           </View>
         </Animated.View>
@@ -293,17 +293,21 @@ export default function CardDetailScreen() {
       </View>
       </KeyboardAvoidingView>
       {selectedSoundUri && (
-        <SoundPlayer uri={selectedSoundUri} key={soundKey} />
+        <SoundPlayer uri={selectedSoundUri} key={soundKey} enabled={soundsEnabled} />
       )}
     </SafeAreaView>
   );
 }
 
-function SoundPlayer({ uri }: { uri: any }) {
+function SoundPlayer({ uri, enabled }: { uri: any; enabled: boolean }) {
   const sound = useAudioPlayer(uri);
   useEffect(() => {
-    void sound.play();
-  }, [sound]);
+    if (enabled) {
+      void sound.play();
+    } else {
+      sound.pause();
+    }
+  }, [sound, enabled]);
   return null;
 }
 
@@ -416,10 +420,7 @@ const styles = StyleSheet.create({
   tools: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
+    marginTop: 0,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: 'rgba(255,255,255,0.92)',
