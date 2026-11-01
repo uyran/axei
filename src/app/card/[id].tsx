@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useAudioPlayer } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -72,6 +73,15 @@ export default function CardDetailScreen() {
 
   const rotation = useSharedValue(0);
 
+  const [soundKey, setSoundKey] = useState<number>(0);
+  const [selectedSoundUri, setSelectedSoundUri] = useState<any>(null);
+  const flipSoundUri = require('../../../assets/sounds/sound2.mp3');
+
+  function playFlipSound() {
+    setSelectedSoundUri(flipSoundUri);
+    setSoundKey((k) => k + 1);
+  }
+
   const frontStyle = useAnimatedStyle(() => ({
     transform: [{ perspective: 1000 }, { rotateY: `${rotation.value}deg` }],
     zIndex: rotation.value <= 90 ? 1 : 0,
@@ -136,6 +146,7 @@ export default function CardDetailScreen() {
   }
 
   function handleFlip() {
+    playFlipSound();
     nameInputRef.current?.blur();
     setNameSelection(undefined);
     editorRef.current?.dismissKeyboard();
@@ -281,8 +292,19 @@ export default function CardDetailScreen() {
         </Animated.View>
       </View>
       </KeyboardAvoidingView>
+      {selectedSoundUri && (
+        <SoundPlayer uri={selectedSoundUri} key={soundKey} />
+      )}
     </SafeAreaView>
   );
+}
+
+function SoundPlayer({ uri }: { uri: any }) {
+  const sound = useAudioPlayer(uri);
+  useEffect(() => {
+    void sound.play();
+  }, [sound]);
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -393,10 +415,13 @@ const styles = StyleSheet.create({
   },
   tools: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 10,
     marginTop: 12,
-    paddingTop: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.92)',
   },
 });

@@ -1,22 +1,30 @@
 import { File } from 'expo-file-system';
 
 import type { BackItem, Card } from '@/types/card';
+import { deleteCardFile } from '@/utils/card-files';
 import {
   deleteCardRowLocal,
   getMeta,
   isCardDirty,
   loadCardLocal,
   loadCardsLocal,
+  loadMediaOutbox,
   loadOutbox,
   markCardClean,
-  outboxCount,
+  removeMediaOutboxEntry,
   removeOutboxEntry,
   replaceCardLocalClean,
   serialize,
   setMeta,
   updateCardBackLocal,
 } from './db';
-import { cacheLocalCopy, isLocalMediaUri, uploadCardMedia } from './media';
+import {
+  cacheLocalCopy,
+  isLocalMediaUri,
+  removeStorageFolder,
+  removeStorageObjects,
+  uploadCardMedia,
+} from './media';
 import { supabase } from './supabase';
 
 const EPOCH = '1970-01-01T00:00:00.000Z';
@@ -35,6 +43,7 @@ type RemoteCardRow = {
 export type SyncResult = {
   pulled: Card[];
   deletedIds: string[];
+  pullSucceeded: boolean;
 };
 
 function parseBack(value: unknown): BackItem[] {
@@ -73,9 +82,10 @@ function contentTypeFor(extension: string): string {
 async function uploadPendingMedia(
   userId: string,
   card: Card,
-): Promise<{ back: BackItem[]; changed: boolean }> {
+): Promise<{ back: BackItem[]; changed: boolean; originals: string[] }> {
   let changed = false;
   const back: BackItem[] = [];
+  const originals: string[] = [];
   for (const item of card.back) {
     if ((item.type === 'photo' || item.type === 'audio') && isLocalMediaUri(item.uri)) {
       const source = new File(item.uri);
@@ -88,14 +98,36 @@ async function uploadPendingMedia(
       const extension = extensionFromUri(item.uri, item.type === 'photo' ? 'jpg' : 'm4a');
       const storagePath = `${userId}/${card.id}/${item.id}.${extension}`;
       await uploadCardMedia(item.uri, storagePath, contentTypeFor(extension));
-      await cacheLocalCopy(item.uri, `${item.id}.${extension}`);
+      const cached = await cacheLocalCopy(item.uri, `${item.id}.${extension}`);
+      if (cached) {
+        // A cópia em media-cache substitui o original; apagar só após o envio.
+        originals.push(item.uri);
+      }
       back.push({ ...item, uri: storagePath });
       changed = true;
     } else {
       back.push(item);
     }
   }
-  return { back, changed };
+  return { back, changed, originals };
+}
+
+async function flushMediaOutbox(): Promise<void> {
+  const entries = await loadMediaOutbox();
+  for (const storagePath of entries) {
+    try {
+      if (storagePath.endsWith('/')) {
+        await removeStorageFolder(storagePath);
+      } else {
+        await removeStorageObjects([storagePath]);
+      }
+      await removeMediaOutboxEntry(storagePath);
+      console.debug('[sync] mídia removida', storagePath);
+    } catch (error) {
+      // Mantém na fila; retry na próxima sincronização.
+      console.warn('[sync] falha ao remover mídia', storagePath, error);
+    }
+  }
 }
 
 async function flushOutbox(userId: string): Promise<void> {
@@ -116,7 +148,7 @@ async function flushOutbox(userId: string): Promise<void> {
         await removeOutboxEntry(entry.card_id);
         continue;
       }
-      const { back, changed } = await uploadPendingMedia(userId, card);
+      const { back, changed, originals } = await uploadPendingMedia(userId, card);
       if (changed) {
         await updateCardBackLocal(card.id, back);
       }
@@ -125,6 +157,9 @@ async function flushOutbox(userId: string): Promise<void> {
         .upsert(toPayload({ ...card, back }, userId), { onConflict: 'id' });
       if (error) {
         throw new Error(error.message);
+      }
+      for (const original of originals) {
+        deleteCardFile(original);
       }
       await removeOutboxEntry(entry.card_id);
       await markCardClean(card.id);
@@ -192,7 +227,7 @@ async function pullRemote(userId: string): Promise<SyncResult> {
   }
 
   await setMeta(lastPullKey, maxUpdated);
-  return { pulled, deletedIds };
+  return { pulled, deletedIds, pullSucceeded: true };
 }
 
 export async function syncWithRemote(userId: string): Promise<SyncResult> {
@@ -201,7 +236,12 @@ export async function syncWithRemote(userId: string): Promise<SyncResult> {
   } catch (error) {
     // Offline ou erro de rede: mantém a fila e tenta na próxima sincronização.
     console.warn('[sync] envio interrompido', error);
-    return { pulled: [], deletedIds: [] };
+    return { pulled: [], deletedIds: [], pullSucceeded: false };
+  }
+  try {
+    await serialize(() => flushMediaOutbox());
+  } catch (error) {
+    console.warn('[sync] limpeza de mídia interrompida', error);
   }
   try {
     const result = await serialize(() => pullRemote(userId));
@@ -211,10 +251,6 @@ export async function syncWithRemote(userId: string): Promise<SyncResult> {
     return result;
   } catch (error) {
     console.warn('[sync] pull falhou', error);
-    return { pulled: [], deletedIds: [] };
+    return { pulled: [], deletedIds: [], pullSucceeded: false };
   }
-}
-
-export async function hasPendingSync(): Promise<boolean> {
-  return (await outboxCount()) > 0;
 }

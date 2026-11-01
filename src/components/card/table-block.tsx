@@ -5,7 +5,6 @@ import { RichEditor } from 'react-native-pell-rich-editor';
 import { TABLE_2X2_HTML } from '@/utils/card-html';
 
 const TABLE_COLOR = '#EA580C';
-const TABLE_SURFACE = '#FFEDD5';
 
 export function TableBlock({ editorRef }: { editorRef: RefObject<RichEditor | null> }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -65,10 +64,9 @@ export function TableBlock({ editorRef }: { editorRef: RefObject<RichEditor | nu
 const styles = StyleSheet.create({
   container: { position: 'relative', zIndex: 3 },
   button: {
-    width: 42, height: 48, marginTop: 12, marginLeft: 8,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: TABLE_COLOR, borderRadius: 8,
-    backgroundColor: TABLE_SURFACE,
+    width: 42, height: 44, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#000000', borderRadius: 8,
+    backgroundColor: '#DBEAFE',
   },
   buttonActive: {
     backgroundColor: TABLE_COLOR,

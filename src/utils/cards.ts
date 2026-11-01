@@ -3,7 +3,8 @@ import type { Card } from '@/types/card';
 export const CARD_PLACEHOLDER_NAME = 'Nome do cartão';
 const CARD_INTERNAL_NAME = 'Sem título';
 
-export const EMERGENCY_CARD_ID = 'emergency';
+const LEGACY_EMERGENCY_CARD_ID = 'emergency';
+export const EMERGENCY_CARD_ID_PREFIX = 'emergency:';
 export const EMERGENCY_CARD_NAME = 'Emergência';
 export const EMERGENCY_COLOR = '#DC2626';
 
@@ -49,13 +50,19 @@ export function createCard(): Card {
   };
 }
 
-export function isEmergencyCard(card: Card): boolean {
-  return card.id === EMERGENCY_CARD_ID;
+export function emergencyCardId(userId: string): string {
+  return `${EMERGENCY_CARD_ID_PREFIX}${userId}`;
 }
 
-export function createEmergencyCard(): Card {
+export function isEmergencyCard(card: Card): boolean {
+  return (
+    card.id === LEGACY_EMERGENCY_CARD_ID || card.id.startsWith(EMERGENCY_CARD_ID_PREFIX)
+  );
+}
+
+export function createEmergencyCard(userId: string): Card {
   return {
-    id: EMERGENCY_CARD_ID,
+    id: emergencyCardId(userId),
     name: EMERGENCY_CARD_NAME,
     favorite: false,
     backgroundSeed: Math.floor(Math.random() * 1_000_000),

@@ -26,11 +26,8 @@ type BackEditorProps = {
 };
 
 const NOTE_COLOR = '#7C3AED';
-const NOTE_SURFACE = '#F3E8FF';
 const PHOTO_COLOR = '#2563EB';
-const PHOTO_SURFACE = '#DBEAFE';
 const RECORD_COLOR = '#DC2626';
-const RECORD_SURFACE = '#FEE2E2';
 
 type AudioItem = Extract<BackItem, { type: 'audio' }>;
 
@@ -487,22 +484,20 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 10,
     borderWidth: 1,
+    borderColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
   },
   noteButton: {
-    backgroundColor: NOTE_SURFACE,
-    borderColor: NOTE_COLOR,
+    backgroundColor: '#DBEAFE',
   },
   photoButton: {
-    backgroundColor: PHOTO_SURFACE,
-    borderColor: PHOTO_COLOR,
+    backgroundColor: '#DBEAFE',
   },
   recordButton: {
-    backgroundColor: RECORD_SURFACE,
-    borderColor: RECORD_COLOR,
+    backgroundColor: '#DBEAFE',
   },
   recordingBar: {
     flexDirection: 'row',

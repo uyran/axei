@@ -9,15 +9,10 @@ interface FormattingToolbarProps {
 const COLORS = ['#202124', '#176B5B', '#A33A2B', '#315CA8', '#FF0000', '#FFEB3B'];
 
 const STYLE_COLOR = '#7C3AED';
-const STYLE_SURFACE = '#F3E8FF';
 const FORMAT_COLOR = '#2563EB';
-const FORMAT_SURFACE = '#DBEAFE';
 const LIST_COLOR = '#0D9488';
-const LIST_SURFACE = '#CCFBF1';
 const TEXT_COLOR_MENU_COLOR = '#8B5CF6';
-const TEXT_COLOR_MENU_SURFACE = '#EDE9FE';
 const HISTORY_COLOR = '#176B5B';
-const HISTORY_SURFACE = '#E6F4EF';
 
 export function FormattingToolbar({ editorRef }: FormattingToolbarProps) {
   const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
@@ -169,26 +164,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, position: 'relative', zIndex: 2 },
   toolbar: {
     flex: 1,
-    height: 54,
-    marginTop: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C9CDD3',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    height: 70,
   },
-  content: { alignItems: 'center', paddingHorizontal: 6 },
+  content: { alignItems: 'center', paddingHorizontal: 6, paddingVertical: 8, gap: 10 },
   button: {
-    width: 42, height: 48, alignItems: 'center', justifyContent: 'center',
-    borderRadius: 8, borderWidth: 1,
+    width: 42, height: 44, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 8, borderWidth: 1, borderColor: '#000000',
   },
-  styleButton: { backgroundColor: STYLE_SURFACE, borderColor: STYLE_COLOR, marginRight: 10 },
-  styleButtonActive: { backgroundColor: STYLE_COLOR },
-  formatButton: { backgroundColor: FORMAT_SURFACE, borderColor: FORMAT_COLOR, marginRight: 10 },
-  listButton: { backgroundColor: LIST_SURFACE, borderColor: LIST_COLOR, marginLeft: 4 },
-  listButtonActive: { backgroundColor: LIST_COLOR },
-  textColorButton: { backgroundColor: TEXT_COLOR_MENU_SURFACE, borderColor: TEXT_COLOR_MENU_COLOR },
-  textColorButtonActive: { backgroundColor: TEXT_COLOR_MENU_COLOR },
-  historyButton: { backgroundColor: HISTORY_SURFACE, borderColor: HISTORY_COLOR },
+  styleButton: { backgroundColor: '#DBEAFE', marginRight: 10 },
+  styleButtonActive: { backgroundColor: '#DBEAFE' },
+  formatButton: { backgroundColor: '#DBEAFE', marginRight: 10 },
+  listButton: { backgroundColor: '#DBEAFE', marginLeft: 4 },
+  listButtonActive: { backgroundColor: '#DBEAFE' },
+  textColorButton: { backgroundColor: '#DBEAFE' },
+  textColorButtonActive: { backgroundColor: '#DBEAFE' },
+  historyButton: { backgroundColor: '#DBEAFE' },
   normalIcon: { fontSize: 16, fontWeight: '600' },
   boldIcon: { fontSize: 19, fontWeight: '800' },
   listIcon: { fontSize: 17, fontWeight: '600' },
@@ -196,7 +186,7 @@ const styles = StyleSheet.create({
   colorIcon: { alignItems: 'center', justifyContent: 'center' },
   colorLetter: { fontSize: 18, fontWeight: '600', lineHeight: 20 },
   colorUnderline: { width: 18, height: 3, marginTop: 2, borderRadius: 2 },
-  separator: { width: 1, height: 26, marginHorizontal: 4, backgroundColor: '#D8DBE0' },
+  separator: { width: 1, height: 26, backgroundColor: '#D8DBE0' },
   swatch: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: '#C3C6CB' },
   colorMenu: {
     position: 'absolute', bottom: 60, right: 4, zIndex: 3,

@@ -14,13 +14,14 @@ import { subscribeToAuthChanges } from '@/services/auth';
 import {
   deleteCardLocal,
   loadCardsLocal,
-  outboxCount,
+  pendingSyncCount,
   saveCardLocal,
   serialize,
 } from '@/services/db';
+import { cleanupDeletedCard, cleanupRemovedMediaItems } from '@/services/media-cleanup';
 import { syncWithRemote } from '@/services/sync';
 import type { BackItem, Card } from '@/types/card';
-import { createCard, createEmergencyCard } from '@/utils/cards';
+import { createCard, createEmergencyCard, generateId, isEmergencyCard } from '@/utils/cards';
 
 const PERSIST_DEBOUNCE_MS = 800;
 const RETRY_INTERVAL_MS = 45_000;
@@ -43,8 +44,10 @@ const CardsContext = createContext<CardsContextValue | null>(null);
 export function CardsProvider({ children }: { children: ReactNode }) {
   const [cards, setCards] = useState<Card[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [initialSyncUserId, setInitialSyncUserId] = useState<string | null>(null);
   const cardsRef = useRef<Card[]>(cards);
   const userIdRef = useRef<string | null>(null);
+  const autoEmergencySeededFor = useRef<string | null>(null);
   const persistTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const syncingRef = useRef(false);
   const syncRequestedRef = useRef(false);
@@ -66,7 +69,13 @@ export function CardsProvider({ children }: { children: ReactNode }) {
     }
     syncingRef.current = true;
     try {
-      const { pulled, deletedIds } = await syncWithRemote(userId);
+      const { pulled, deletedIds, pullSucceeded } = await syncWithRemote(userId);
+      if (userIdRef.current !== userId) {
+        return;
+      }
+      if (pullSucceeded) {
+        setInitialSyncUserId(userId);
+      }
       if (pulled.length === 0 && deletedIds.length === 0) {
         return;
       }
@@ -147,6 +156,8 @@ export function CardsProvider({ children }: { children: ReactNode }) {
       userIdRef.current = userId;
       if (previousUserId !== userId) {
         setHydrated(false);
+        setInitialSyncUserId(null);
+        autoEmergencySeededFor.current = null;
       }
       persistTimers.current.forEach((timer) => clearTimeout(timer));
       persistTimers.current.clear();
@@ -192,11 +203,23 @@ export function CardsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      void outboxCount().then((count) => {
-        if (count > 0) {
-          void runSync();
-        }
-      });
+      const userId = userIdRef.current;
+      if (!userId) {
+        return;
+      }
+      if (initialSyncUserId !== userId) {
+        void runSync();
+        return;
+      }
+      void pendingSyncCount()
+        .then((count) => {
+          if (count > 0) {
+            void runSync();
+          }
+        })
+        .catch((error) => {
+          console.warn('[sync] falha ao consultar fila pendente', error);
+        });
     }, RETRY_INTERVAL_MS);
     const appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -207,7 +230,7 @@ export function CardsProvider({ children }: { children: ReactNode }) {
       clearInterval(interval);
       appStateSubscription.remove();
     };
-  }, [runSync]);
+  }, [initialSyncUserId, runSync]);
 
   const addCard = useCallback(
     (card: Card): Card => {
@@ -231,8 +254,28 @@ export function CardsProvider({ children }: { children: ReactNode }) {
   }, [addCard]);
 
   const createEmergency = useCallback((): Card => {
-    return addCard(createEmergencyCard());
+    const existing = cardsRef.current.find(isEmergencyCard);
+    if (existing) {
+      return existing;
+    }
+    return addCard(createEmergencyCard(userIdRef.current ?? generateId()));
   }, [addCard]);
+
+  // Sem cartões, o cartão de emergência é criado automaticamente na inicialização.
+  // A decisão é tomada uma única vez por usuário em cada sessão do app.
+  useEffect(() => {
+    const userId = userIdRef.current;
+    if (!hydrated || initialSyncUserId !== userId || !userId) {
+      return;
+    }
+    if (autoEmergencySeededFor.current === userId) {
+      return;
+    }
+    autoEmergencySeededFor.current = userId;
+    if (cards.length === 0) {
+      createEmergency();
+    }
+  }, [cards.length, createEmergency, hydrated, initialSyncUserId]);
 
   const getCard = useCallback(
     (id: string) => cards.find((card) => card.id === id),
@@ -265,6 +308,12 @@ export function CardsProvider({ children }: { children: ReactNode }) {
 
   const setCardBack = useCallback(
     (id: string, back: BackItem[]) => {
+      const previous = cardsRef.current.find((card) => card.id === id)?.back ?? [];
+      const nextIds = new Set(back.map((item) => item.id));
+      const removed = previous.filter((item) => !nextIds.has(item.id));
+      if (removed.length > 0) {
+        void cleanupRemovedMediaItems(removed);
+      }
       updateCard(id, (card) => ({ ...card, back }));
     },
     [updateCard],
@@ -284,9 +333,13 @@ export function CardsProvider({ children }: { children: ReactNode }) {
         clearTimeout(timer);
         persistTimers.current.delete(id);
       }
+      const userId = userIdRef.current;
+      const card = cardsRef.current.find((entry) => entry.id === id);
+      if (card) {
+        void cleanupDeletedCard(card, userId);
+      }
       cardsRef.current = cardsRef.current.filter((card) => card.id !== id);
       setCards((current) => current.filter((card) => card.id !== id));
-      const userId = userIdRef.current;
       if (userId) {
         void serialize(() => deleteCardLocal(id))
           .then(() => runSync())

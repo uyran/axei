@@ -21,6 +21,9 @@ type CardStackItemProps = {
   top: number;
   zIndex: number;
   shuffleSeed?: number;
+  shuffleDirection?: number;
+  shuffleAxis?: 'x' | 'y' | null;
+  shuffleIntensity?: number;
   onPress: () => void;
   onToggleFavorite: () => void;
 };
@@ -40,33 +43,61 @@ export function CardStackItem({
   top,
   zIndex,
   shuffleSeed = 0,
+  shuffleDirection = 1,
+  shuffleAxis = null,
+  shuffleIntensity = 1,
   onPress,
   onToggleFavorite,
 }: CardStackItemProps) {
   const emergency = isEmergencyCard(card);
   const shuffleX = useSharedValue(0);
+  const shuffleY = useSharedValue(0);
   const shuffleRotate = useSharedValue(0);
 
   useEffect(() => {
     if (!shuffleSeed) {
       return;
     }
-    const direction = Math.random() < 0.5 ? -1 : 1;
-    const distance = direction * (50 + Math.random() * 80);
-    const angle = direction * (4 + Math.random() * 8);
-    shuffleX.value = withSequence(
-      withTiming(distance, { duration: 240, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-    );
-    shuffleRotate.value = withSequence(
-      withTiming(angle, { duration: 240, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 400, easing: Easing.inOut(Easing.quad) }),
-    );
-  }, [shuffleSeed, shuffleX, shuffleRotate]);
+    const intensity = shuffleAxis === 'x' ? shuffleIntensity * 2.5 : shuffleIntensity;
+    const bias = shuffleDirection === -1 ? 1 : -1;
+    const direction = Math.random() < 0.5 ? bias : bias * -1;
+    const baseDistance = 50 + Math.random() * 80;
+    const baseAngle = 4 + Math.random() * 8;
+
+    if (shuffleAxis === 'x') {
+      const distance = direction * width * (0.08 + Math.random() * 0.07);
+      const offsetY = (Math.random() - 0.5) * 16;
+      const angle = direction * (2 + Math.random() * 2);
+      shuffleX.value = withSequence(
+        withTiming(distance, { duration: 320, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+      );
+      shuffleY.value = withSequence(
+        withTiming(offsetY, { duration: 320, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+      );
+      shuffleRotate.value = withSequence(
+        withTiming(angle, { duration: 320, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+      );
+    } else {
+      const distance = direction * baseDistance * intensity;
+      const angle = direction * baseAngle * intensity;
+      shuffleX.value = withSequence(
+        withTiming(distance, { duration: 240, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 400, easing: Easing.inOut(Easing.quad) }),
+      );
+      shuffleRotate.value = withSequence(
+        withTiming(angle, { duration: 240, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 400, easing: Easing.inOut(Easing.quad) }),
+      );
+    }
+  }, [shuffleSeed, shuffleDirection, shuffleAxis, shuffleIntensity, width, shuffleX, shuffleY, shuffleRotate]);
 
   const shuffleStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: shuffleX.value },
+      { translateY: shuffleY.value },
       { perspective: 1000 },
       { rotate: `${shuffleRotate.value}deg` },
     ],

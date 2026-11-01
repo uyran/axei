@@ -45,6 +45,10 @@ async function openDatabase(): Promise<SQLite.SQLiteDatabase> {
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS media_outbox (
+      storage_path TEXT PRIMARY KEY NOT NULL,
+      queued_at TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -156,9 +160,39 @@ export async function removeOutboxEntry(cardId: string): Promise<void> {
   await db.runAsync('DELETE FROM outbox WHERE card_id = ?', cardId);
 }
 
-export async function outboxCount(): Promise<number> {
+export async function enqueueMediaDeletion(storagePaths: string[]): Promise<void> {
+  if (storagePaths.length === 0) {
+    return;
+  }
   const db = await getDb();
-  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM outbox');
+  const queuedAt = new Date().toISOString();
+  for (const storagePath of storagePaths) {
+    await db.runAsync(
+      `INSERT INTO media_outbox (storage_path, queued_at) VALUES (?, ?)
+       ON CONFLICT(storage_path) DO NOTHING`,
+      [storagePath, queuedAt],
+    );
+  }
+}
+
+export async function loadMediaOutbox(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ storage_path: string }>(
+    'SELECT storage_path FROM media_outbox ORDER BY queued_at',
+  );
+  return rows.map((row) => row.storage_path);
+}
+
+export async function removeMediaOutboxEntry(storagePath: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM media_outbox WHERE storage_path = ?', storagePath);
+}
+
+export async function pendingSyncCount(): Promise<number> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ count: number }>(
+    'SELECT (SELECT COUNT(*) FROM outbox) + (SELECT COUNT(*) FROM media_outbox) AS count',
+  );
   return row?.count ?? 0;
 }
 

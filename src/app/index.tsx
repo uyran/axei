@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
+import { useAudioPlayer } from 'expo-audio';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   type GestureResponderEvent,
@@ -20,43 +21,69 @@ import { CardStackItem } from '@/components/card-stack-item';
 import { colors } from '@/constants/colors';
 import { useCards } from '@/hooks/use-cards';
 import { signOut } from '@/services/auth';
-import {
-  EMERGENCY_COLOR,
-  isEmergencyCard,
-  matchesQuery,
-  sortCardsByName,
-} from '@/utils/cards';
+import { isEmergencyCard, matchesQuery, sortCardsByName } from '@/utils/cards';
 
 const STACK_STEP = 40;
 const CARD_ASPECT_RATIO = 1.2;
 
 export default function HomeScreen() {
-  const { cards, hydrated, createNewCard, createEmergencyCard, toggleFavorite } = useCards();
+  const { cards, hydrated, createNewCard, toggleFavorite } = useCards();
   const { width: windowWidth } = useWindowDimensions();
   const [query, setQuery] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [shuffleSeed, setShuffleSeed] = useState(0);
+  const [shuffleDirection, setShuffleDirection] = useState<number>(1);
+  const [shuffleAxis, setShuffleAxis] = useState<'x' | 'y' | null>(null);
+  const [shuffleIntensity, setShuffleIntensity] = useState<number>(1);
   const shuffleTouchStartY = useRef<number | null>(null);
+  const shuffleTouchStartX = useRef<number | null>(null);
   const shuffleTriggered = useRef(false);
   const shuffleJustHappened = useRef(false);
+  const verticalScrollGesture = useRef(false);
+
+  const [soundKey, setSoundKey] = useState<number>(0);
+  const [selectedSoundUri, setSelectedSoundUri] = useState<any>(null);
+  const soundGestureUri = require('../../assets/sounds/sound4.mp3');
+  const soundSelectUri = require('../../assets/sounds/sound1.mp3');
+
+  function playGestureSound() {
+    setSelectedSoundUri(soundGestureUri);
+    setSoundKey((k) => k + 1);
+  }
+
+  function playSelectSound() {
+    setSelectedSoundUri(soundSelectUri);
+    setSoundKey((k) => k + 1);
+  }
 
   function handleStackTouchStart(event: GestureResponderEvent) {
     shuffleTouchStartY.current = event.nativeEvent.pageY;
+    shuffleTouchStartX.current = event.nativeEvent.pageX;
     shuffleTriggered.current = false;
     shuffleJustHappened.current = false;
+    verticalScrollGesture.current = false;
   }
 
   function handleStackTouchMove(event: GestureResponderEvent) {
-    if (shuffleTriggered.current || shuffleTouchStartY.current == null) {
+    if (shuffleTriggered.current || shuffleTouchStartY.current == null || shuffleTouchStartX.current == null) {
       return;
     }
     const dy = event.nativeEvent.pageY - shuffleTouchStartY.current;
-    if (dy > 64) {
+    const dx = event.nativeEvent.pageX - shuffleTouchStartX.current;
+    if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) {
+      verticalScrollGesture.current = true;
+      shuffleTriggered.current = true;
+      return;
+    }
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 64) {
+      setShuffleAxis('x');
+      setShuffleDirection(dx > 0 ? 1 : -1);
+      setShuffleIntensity(2);
       shuffleTriggered.current = true;
       shuffleJustHappened.current = true;
       setShuffleSeed((seed) => seed + 1);
+      playGestureSound();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch((error) => {
         console.log('[haptics] falha ao vibrar', error);
       });
@@ -65,28 +92,33 @@ export default function HomeScreen() {
 
   function handleStackTouchEnd() {
     shuffleTouchStartY.current = null;
+    shuffleTouchStartX.current = null;
   }
 
   function handleOpenCard(id: string) {
+    if (verticalScrollGesture.current) {
+      return;
+    }
     if (shuffleJustHappened.current) {
       shuffleJustHappened.current = false;
       return;
     }
+    playSelectSound();
     router.push({ pathname: '/card/[id]', params: { id } });
   }
 
   const cardWidth = windowWidth - 28;
   const cardHeight = cardWidth * CARD_ASPECT_RATIO;
 
-  const showEmergencyBanner = hydrated && cards.length === 0 && !bannerDismissed;
-
   const visibleCards = useMemo(() => {
     const filtered = sortCardsByName(cards).filter(
       (card) => matchesQuery(card, query) && (!favoritesOnly || card.favorite),
     );
-    const emergency = filtered.filter(isEmergencyCard);
-    const normal = filtered.filter((card) => !isEmergencyCard(card));
-    return [...normal, ...emergency];
+    if (favoritesOnly) return filtered;
+
+    const regularCards = filtered.filter((card) => !isEmergencyCard(card));
+    const emergencyCards = filtered.filter(isEmergencyCard);
+    return [...regularCards, ...emergencyCards];
   }, [cards, query, favoritesOnly]);
 
   const stackHeight =
@@ -96,11 +128,6 @@ export default function HomeScreen() {
 
   function handleCreateCard() {
     const card = createNewCard();
-    router.push({ pathname: '/card/[id]', params: { id: card.id } });
-  }
-
-  function handleCreateEmergencyCard() {
-    const card = createEmergencyCard();
     router.push({ pathname: '/card/[id]', params: { id: card.id } });
   }
 
@@ -187,39 +214,13 @@ export default function HomeScreen() {
 
       {!hydrated ? null : visibleCards.length === 0 ? (
         <View style={styles.emptyState}>
-          {showEmergencyBanner ? (
-            <View style={styles.banner}>
-              <Text style={styles.bannerTitle}>Cartão de emergência</Text>
-              <Text style={styles.bannerText}>
-                Criar um cartão com os principais números de emergência (190, 192, 193, 199, 191,
-                180 e 100)?
-              </Text>
-              <View style={styles.bannerActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleCreateEmergencyCard}
-                  style={({ pressed }) => [styles.bannerButton, styles.bannerConfirm, pressed && styles.pressed]}
-                >
-                  <Text style={styles.bannerConfirmText}>Criar</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setBannerDismissed(true)}
-                  style={({ pressed }) => [styles.bannerButton, styles.bannerCancel, pressed && styles.pressed]}
-                >
-                  <Text style={styles.bannerCancelText}>Agora não</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>
-              {cards.length === 0
-                ? 'Toque em + para criar seu primeiro cartão.'
-                : favoritesOnly
-                  ? 'Nenhum cartão favorito ainda. Toque na estrela de um cartão para favoritar.'
-                  : 'Nenhum cartão encontrado.'}
-            </Text>
-          )}
+          <Text style={styles.emptyText}>
+            {cards.length === 0
+              ? 'Toque em + para criar seu primeiro cartão.'
+              : favoritesOnly
+                ? 'Nenhum cartão favorito ainda. Toque na estrela de um cartão para favoritar.'
+                : 'Nenhum cartão encontrado.'}
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -240,6 +241,9 @@ export default function HomeScreen() {
                 top={index * STACK_STEP}
                 zIndex={index}
                 shuffleSeed={shuffleSeed}
+                shuffleDirection={shuffleDirection}
+                shuffleAxis={shuffleAxis}
+                shuffleIntensity={shuffleIntensity}
                 onPress={() => handleOpenCard(card.id)}
                 onToggleFavorite={() => toggleFavorite(card.id)}
               />
@@ -256,8 +260,19 @@ export default function HomeScreen() {
       >
         <Ionicons name="add" size={30} color={colors.onPrimary} />
       </Pressable>
+      {selectedSoundUri && (
+        <SoundPlayer uri={selectedSoundUri} key={soundKey} />
+      )}
     </SafeAreaView>
   );
+}
+
+function SoundPlayer({ uri }: { uri: any }) {
+  const sound = useAudioPlayer(uri);
+  useEffect(() => {
+    void sound.play();
+  }, [sound]);
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -300,7 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 42,
     borderRadius: 12,
-    backgroundColor: colors.surface,
+    backgroundColor: '#c0def3',
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -327,63 +342,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textMuted,
     textAlign: 'center',
-  },
-  banner: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: EMERGENCY_COLOR,
-    backgroundColor: colors.surface,
-    padding: 16,
-    gap: 8,
-    elevation: 3,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-  },
-  bannerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: EMERGENCY_COLOR,
-    textAlign: 'center',
-  },
-  bannerText: {
-    fontSize: 14,
-    color: colors.text,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  bannerActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-  },
-  bannerButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bannerConfirm: {
-    backgroundColor: EMERGENCY_COLOR,
-  },
-  bannerConfirmText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  bannerCancel: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  bannerCancelText: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
   },
   fab: {
     position: 'absolute',

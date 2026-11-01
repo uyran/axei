@@ -1,128 +1,380 @@
+
 # AXEI — Definição do aplicativo e plano de desenvolvimento
 
-> **Documento principal do projeto.** Mantido como `PROJECT.md` na raiz. O estado atual do código e das verificações vive no `CHANGELOG.md`.
+## 1. Objetivo do projeto
 
-## 1. Definição e objetivo
+O Axei é um aplicativo móvel para Android e iOS destinado à criação, organização, pesquisa e consulta de informações em cartões pessoais.
 
-O **Axei** é um aplicativo móvel (Android e iOS) para criar, organizar, pesquisar e consultar dados em **cartões pessoais**. Cada cartão tem:
+Cada cartão possui duas faces:
 
-- **Frente** — um mini editor rico WYSIWYG para conteúdo textual (títulos, negrito, itálico, cores, listas, checklist, tabelas).
-- **Verso** — anotações, fotografias da galeria e gravações de áudio.
+- **Frente:** editor de texto rico (WYSIWYG), com títulos, formatação, cores, listas, checklist e tabelas.
+- **Verso:** anotações, fotografias da galeria e gravações de áudio.
 
-**Fluxo resumido:** o usuário faz login, vê uma **pilha visual de cartões sobrepostos** (não uma lista) na tela principal, cria cartões com o botão **+**, edita frente e verso com rotação 3D do cartão, favorita, pesquisa por nome/conteúdo e exclui com confirmação. No primeiro acesso (ou sem cartões), um banner oferece criar automaticamente um **cartão de emergência** com números úteis.
+### Fluxo principal
 
-O acesso é individual por usuário; os dados ficam protegidos por conta, com sincronização com a nuvem (Supabase) e suporte offline previstos na Etapa 2.6.
+1. O usuário realiza o login.
+2. A tela principal apresenta uma pilha visual de cartões sobrepostos, e não uma lista convencional.
+3. O usuário pode criar cartões pelo botão `+`.
+4. Cada cartão permite editar sua frente e seu verso por meio de rotação tridimensional.
+5. É possível favoritar, pesquisar e excluir cartões.
+6. Na inicialização, quando não houver nenhum cartão, o aplicativo cria automaticamente um cartão de emergência, sem consultar o usuário.
 
-## 2. Tecnologia
+O acesso é individual por usuário. Os dados devem permanecer protegidos por conta, com persistência e sincronização na nuvem por meio do Supabase e suporte offline.
 
-**Em uso hoje:**
+---
 
-- Expo SDK 57, React Native 0.86.3, React 19.2.3, TypeScript ~6, Expo Router ~57 (rotas em `src/app`, alias `@/* -> ./src/*`).
-- Supabase — autenticação (e-mail/senha + Google), cliente em `src/services/supabase.ts` com sessão persistente via `expo-sqlite` localStorage.
-- `react-native-pell-rich-editor` + `react-native-webview` — frente do cartão (mini editor rico, compatível com Expo Go).
-- `expo-audio`, `expo-image-picker`, `expo-file-system` — verso do cartão (áudio, fotos, arquivos locais).
-- React Native Reanimated — rotação 3D do cartão; `@expo/vector-icons` (Ionicons) — ícones.
+## 2. Tecnologias e arquitetura
 
-**Previsto (ainda não instalado/ativo):**
+### Tecnologias utilizadas
 
-- Supabase PostgreSQL + políticas RLS + Supabase Storage — persistência, sincronização e offline (Etapa 2.6).
-- React Native Skia — fundos visuais dos cartões (alternativa atual: fundo *glass* procedural em SVG/CSS; Skia exige build nativo — Etapa 3).
-- Login Google em build nativo com scheme `axei://` (Etapa 3 — no Expo Go o retorno OAuth não é capturado).
+- Expo SDK 57.
+- React Native 0.86.3.
+- React 19.2.3.
+- TypeScript 6.
+- Expo Router, com rotas em `src/app`.
+- Supabase para autenticação e serviços de backend.
+- `expo-sqlite` para persistência local da sessão.
+- `react-native-pell-rich-editor` e `react-native-webview` para o editor da frente do cartão.
+- `expo-audio` para gravação e reprodução de áudio.
+- `expo-image-picker` para seleção de fotografias.
+- `expo-file-system` para armazenamento de arquivos locais.
+- React Native Reanimated para animações e rotação 3D.
+- `@expo/vector-icons` para ícones.
 
-**Regras técnicas:** manter as tecnologias principais salvo autorização expressa; confirmar compatibilidade antes de atualizar; instalar pacotes Expo com `npx expo install`; separar telas, componentes, serviços, tipos e utilitários; não tratar o PostgreSQL como armazenamento automático de multimídia (fotos/áudios vão para o Storage).
+### Organização do código
 
-## 3. Regras para a IA
+Preservar a separação de responsabilidades entre:
 
-### 3.1 Autorização e escopo
+- Telas e rotas.
+- Componentes.
+- Hooks.
+- Serviços.
+- Tipos.
+- Utilitários.
 
-- Antes de **qualquer** implementação: ler este arquivo e o `CHANGELOG.md`, examinar o código existente, registrar o diagnóstico e **apresentar o escopo aguardando autorização**.
-- Executar somente a etapa/tarefa expressamente autorizada. Ao concluir, parar, resumir e pedir autorização para a próxima.
-- Não tomar decisões que alterem requisitos, arquitetura, modelo de dados, dependências importantes ou comportamento do app sem consultar o usuário.
-- Não ampliar escopo nem adicionar funcionalidades não previstas.
+O cliente Supabase está localizado em:
 
-### 3.2 Verificações e testes
+`src/services/supabase.ts`
 
-- **Itens marcados como `[x]` ou `CONCLUÍDO` não precisam ser relidos nem revalidados a cada nova etapa** — consultar apenas se a nova etapa depender diretamente deles.
-- **Verificação completa (`tsc`, `lint`, `expo export`) somente após mudanças críticas**: dependências novas/removidas, modelo de dados, navegação, reimplementações de componentes grandes. Ajustes pequenos (estilo, rótulos, correções pontuais) bastam `tsc` + `lint` ou nenhuma bateria, a critério do tamanho da mudança.
-- Testes em dispositivo só quando o usuário pedir ou quando a mudança for de risco alto; não inventar resultados de teste.
-- Nunca afirmar que teste/build/sincronização foi executado sem ter executado.
+O modelo principal dos cartões está localizado em:
 
-### 3.3 Documentação
+`src/types/card.ts`
 
-- `PROJECT.md` mantém apenas requisitos e estado **vigentes**; `CHANGELOG.md` mantém apenas o **estado atual** do projeto (sem saga de código que foi implementado e substituído).
-- Ao substituir código/instrução, remover no mesmo momento a versão obsoleta.
-- Nunca commitar senhas, tokens ou credenciais; `.env.local` é a única fonte das chaves públicas.
+Preservar os caminhos e a organização existentes, salvo necessidade técnica justificada.
 
-### 3.4 Segurança e dependências
+### Tecnologias e recursos previstos
 
-- RLS do Supabase deve garantir que cada usuário só acesse seus próprios dados (Etapa 2.6).
-- Não adicionar bibliotecas sem necessidade comprovada; evitar versões beta/alpha.
+- Supabase PostgreSQL com políticas RLS para proteção dos dados.
+- Supabase Storage para fotografias e áudios.
+- Persistência local, sincronização e suporte offline.
+- Login Google em build nativo, utilizando o esquema `axei://`.
 
-## 4. Funcionalidades e regras vigentes
+O estado de implementação de cada recurso deve ser consultado no `CHANGELOG.md`. Não considerar um recurso concluído apenas porque sua tecnologia está instalada.
 
-**Autenticação (Etapa 1):** e-mail/senha (cadastro, login, logout, recuperação de senha) e Google; sessão persistente; rotas protegidas (públicas: `login`, `signup`, `recover`; privada: `index`); mensagens de erro em português sem expor credenciais. **Google está bloqueado no Expo Go** (retorno OAuth não capturado) — revisão no build nativo da Etapa 3.
+---
 
-**Tela principal:** ícone do app no topo; barra de pesquisa **sempre visível** com botão de estrela ao lado que alterna filtro de somente favoritos; pilha vertical de cartões sobrepostos (altura ≈ 1,2 × largura, bordas arredondadas, aparência 3D), cada um deslocado para baixo de modo que o nome de todos fique visível; com muitos cartões a pilha rola; ordenação **alfabética crescente case-insensitive** (pt-BR); favoritar não altera a ordenação; estrela (favoritar/desfavoritar) no canto superior esquerdo de **todos** os cartões; FAB **+** no canto inferior direito; estados vazios distintos ("Toque em +..." / "Nenhum cartão encontrado" / "Nenhum cartão favorito ainda").
+## 3. Requisitos funcionais
 
-**Cartão novo:** abre imediatamente em modo de edição, nome vazio com placeholder `Nome do cartão`, fundo *glass* aleatório por cartão (o mesmo na frente e no verso). Cartão sem nome nem conteúdo significativo é **descartado silenciosamente** ao sair; com conteúdo mas sem nome, Alert "Dá um nome ao cartão" (manter como "Sem título" ou descartar). O nome interno provisório é `Sem título`.
+### 3.1 Autenticação
 
-**Tela do cartão:** rotação tridimensional no eixo Y (Reanimated, 450 ms) entre frente e verso; menu de exclusão no canto superior direito **da tela** (com confirmação); nome sempre centralizado e, ao focar, cursor no início do campo (sem mover o texto).
+O aplicativo deve oferecer:
 
-**Frente do cartão — mini editor rico WYSIWYG** (`react-native-pell-rich-editor` + `react-native-webview`, barra idêntica a `especificacao_mini_editor.md`, aprovada em 11/10/2026):
+- Cadastro com e-mail e senha.
+- Login com e-mail e senha.
+- Logout.
+- Recuperação de senha.
+- Autenticação com Google.
+- Persistência da sessão.
+- Proteção das rotas privadas.
 
-- Conteúdo salvo como **string HTML** (`Card.front`).
-- Barra de formatação **no rodapé da tela, fora do cartão, apenas com a frente visível**: **Aa** (Título/Subtítulo) · **B** · **I** · **☷** listas (marcadores, numerada, checklist) · **A** cor (6 cores) · **↶ ↷** (desfazer/refazer).
-- Botão **▦** à parte: Nova tabela 2×2, + Linha, + Coluna.
-- Ícone de **salvar** no canto superior esquerdo da frente (recolhe teclado); favorito só na tela principal.
+Rotas públicas:
+- `login`
+- `signup`
+- `recover`
 
-**Verso do cartão — barra inferior com:** Nota (caixa de texto multilinha), Foto (galeria, sem câmera) e Gravar (áudio com duração ao vivo). Áudios gravados direto no diretório de documentos; fotos copiadas para `documentDirectory/card-files/`; remover um item apaga o arquivo físico. Permissões negadas tratadas com Alert.
+Rota privada principal:
+- `index`
 
-**Cartão de emergência (Etapa 2.7):** na primeira abertura ou quando não houver cartões, banner perguntando se o usuário deseja criá-lo; se aceitar, cartão `Emergência` com o conteúdo abaixo na frente:
+Mensagens de erro devem ser apresentadas em português, sem expor credenciais ou informações sensíveis.
 
-```
-190 – Polícia Militar
-192 – SAMU
-193 – Corpo de Bombeiros
-199 – Defesa Civil
-191 – Polícia Rodoviária Federal
-180 – Central de Atendimento à Mulher
+**Observação:** o retorno da autenticação Google não é capturado corretamente no Expo Go. A integração deve ser validada em build nativo com o esquema `axei://`.
+
+### 3.2 Tela principal
+
+A tela principal deve apresentar:
+
+- Ícone do aplicativo no topo.
+- Barra de pesquisa permanentemente visível.
+- Botão de estrela ao lado da pesquisa para filtrar somente favoritos.
+- Pilha vertical de cartões sobrepostos.
+- Botão flutuante `+` no canto inferior direito.
+
+#### Aparência e organização da pilha
+
+- Os cartões devem ter aparência tridimensional.
+- Altura aproximada de 1,2 vez a largura.
+- Bordas arredondadas.
+- Deslocamento vertical que permita visualizar o nome de todos os cartões.
+- Rolagem quando houver muitos cartões.
+- Ordenação alfabética crescente, sem diferenciar maiúsculas e minúsculas, considerando o português brasileiro. Na pilha principal, o cartão de emergência fica por último, inclusive nos resultados da pesquisa.
+- Quando o filtro de favoritos estiver ativo, o cartão de emergência só aparece se estiver favoritado e, nesse caso, segue a ordenação alfabética dos demais favoritos.
+- Favoritar ou desfavoritar não deve alterar a ordenação.
+- Todos os cartões devem apresentar a estrela de favorito no canto superior esquerdo.
+
+#### Gesto de embaralhar
+
+- Arrastar horizontalmente sobre a pilha deve animar o reposicionamento temporário dos cartões, considerando a direção e aplicando maior intensidade.
+- Arrastar verticalmente deve rolar a pilha para cima ou para baixo, sem embaralhar os cartões.
+- O arraste vertical não deve abrir o cartão; somente um toque deve selecioná-lo.
+- O embaralhamento horizontal não altera a ordenação alfabética nem seleciona um cartão; a abertura continua sendo feita por toque.
+- O gesto fornece resposta tátil e efeito sonoro.
+
+#### Estados vazios
+
+Apresentar mensagens diferentes para:
+
+- Nenhum resultado encontrado na pesquisa: "Nenhum cartão encontrado."
+- Nenhum cartão favorito: "Nenhum cartão favorito ainda. Toque na estrela de um cartão para favoritar."
+
+### 3.3 Criação de cartões
+
+Ao tocar no botão `+`:
+
+- Criar um cartão imediatamente em modo de edição.
+- Apresentar o campo de nome vazio com o placeholder `Nome do cartão`.
+- Gerar um fundo visual aleatório para cada cartão.
+- Manter o mesmo fundo na frente e no verso do cartão.
+
+Regras de nome e descarte:
+
+- O nome interno provisório será `Sem título`.
+- Um cartão sem nome e sem conteúdo significativo deve ser descartado silenciosamente ao sair.
+- Se houver conteúdo, mas não houver nome, apresentar o alerta "Dá um nome ao cartão".
+- O usuário poderá manter o cartão como "Sem título" ou descartá-lo.
+
+### 3.4 Visualização e edição do cartão
+
+- A frente e o verso devem alternar por rotação tridimensional no eixo Y.
+- Utilizar React Native Reanimated.
+- Duração prevista da animação: 450 ms.
+- O botão de opções (`…`) deve ficar no canto superior direito da tela, fora do conteúdo do cartão. Ao tocá-lo, abrir uma confirmação com o título "Excluir cartão", as ações "Cancelar" e "Excluir", e informar que a ação não pode ser desfeita.
+- O nome deve permanecer centralizado.
+- Ao focar o campo de nome, posicionar o cursor no início do texto, sem deslocar seu conteúdo.
+
+### 3.5 Frente do cartão: editor de texto rico
+
+Utilizar `react-native-pell-rich-editor` integrado com `react-native-webview`.
+
+O conteúdo da frente deve ser armazenado como string HTML em `Card.front`.
+
+A barra de formatação deve ficar no rodapé da frente do cartão, dentro dele, e aparecer somente quando a frente estiver visível.
+
+#### Ferramentas da barra
+
+- `Aa`: submenu com “Título” (`heading1`) e “Subtítulo” (`heading2`).
+- `B`: negrito.
+- `☷`: listas com marcadores, numeradas e checklist.
+- `A`: seleção de cor, com seis opções.
+- A aplicação das cores utiliza o comportamento padrão de seleção do editor rich text.
+- `↶`: desfazer.
+
+O itálico (`I`) e o refazer (`↷`) foram removidos da barra para ampliar o espaço; decisão confirmada em 31/10/2026.
+
+O botão de tabela deve ficar separado da barra principal:
+
+- Criar tabela inicial 2 × 2.
+- Adicionar linha.
+- Adicionar coluna.
+
+Outras regras:
+
+- O ícone de salvar deve ficar no canto superior esquerdo da frente.
+- Ao salvar, recolher o teclado.
+- O botão de favorito deve existir somente na tela principal.
+- A barra deve respeitar a especificação aprovada em `especificacao_mini_editor.md`.
+
+### 3.6 Verso do cartão: notas, fotografias e áudio
+
+A barra inferior deve oferecer três recursos:
+
+**Nota**
+- Caixa de texto multilinha.
+
+**Foto**
+- Seleção de fotografias da galeria e captura pela câmera.
+- As duas opções devem estar disponíveis no menu de adição de foto.
+
+**Gravar**
+- Gravação de áudio.
+- Exibição da duração da gravação em tempo real.
+- Reprodução dos áudios gravados.
+
+Armazenamento:
+
+- Gravações de áudio no diretório de documentos do aplicativo.
+- Fotografias copiadas para `documentDirectory/card-files/`.
+- A remoção de um item deve também remover seu arquivo físico correspondente.
+- Permissões negadas devem ser tratadas com mensagens de alerta.
+
+A sincronização dos arquivos com o Supabase Storage pertence à implementação de persistência e sincronização.
+
+### 3.7 Busca e favoritos
+
+- Pesquisar pelo nome do cartão e pelo conteúdo textual da frente.
+- Busca sem diferenciação entre letras maiúsculas e minúsculas.
+- O filtro de favoritos deve mostrar somente cartões marcados.
+- Favoritar não deve alterar a ordenação alfabética.
+- Na pilha principal, o cartão de emergência fica por último, inclusive em buscas. No filtro de favoritos, se estiver favoritado, segue a ordenação alfabética dos demais favoritos.
+
+### 3.8 Cartão de emergência
+
+Na inicialização, quando não houver nenhum cartão, criar automaticamente um cartão de emergência, sem consultar o usuário. Não deve existir banner nem confirmação para essa criação.
+
+O cartão deve ser criado com o nome `Emergência` e com o seguinte conteúdo na frente:
+
+190 – Polícia Militar  
+192 – SAMU  
+193 – Corpo de Bombeiros  
+199 – Defesa Civil  
+191 – Polícia Rodoviária Federal  
+180 – Central de Atendimento à Mulher  
 100 – Direitos Humanos - Violações contra Crianças e Adolescentes
-```
 
-**Regras gerais:** sem campo de data de alteração (data de criação pode ser exibida se prevista na interface); salvamento automático em memória (persistência na 2.6); busca por nome e conteúdo textual da frente, case-insensitive.
+A criação deve respeitar as regras normais de identificação e armazenamento dos cartões.
 
-## 5. Etapas
+O identificador do cartão de emergência deve ser único por usuário, no formato `emergency:<user_id>`, para não colidir com o cartão de outro usuário. Cartões antigos com o identificador legado `emergency` continuam reconhecidos.
 
-| Etapa | Status | Resumo |
-|---|---|---|
-| 1 — Login e autenticação | **PENDENTE** | E-mail/senha, sessão, rotas e recuperação **aprovados em dispositivo** (iPhone e Android). Única pendência: **login Google não funciona no Expo Go** (deep link `exp://` do retorno OAuth não é capturado; código pronto, revisão no build nativo da Etapa 3 com scheme `axei://`). |
+A criação automática só pode ocorrer quando a lista estiver vazia e nunca deve gerar um segundo cartão de emergência.
 
-| 2 — Cartões e funcionamento | **EM ANDAMENTO** | Ver subetapas abaixo. |
+### 3.9 Regras gerais dos cartões
 
-| 3 — Builds e distribuição | NÃO INICIADA | Revisar identificadores, permissões e RLS; builds de teste; login Google em build nativo; Skia (se adotado); publicação sob autorização específica. |
+- Não incluir campo de data de alteração.
+- A data de criação poderá ser exibida se prevista na interface.
+- O salvamento deve preservar o conteúdo durante a edição.
+- A persistência definitiva deve utilizar a arquitetura local e em nuvem definida para o projeto.
+- A exclusão de cartões deve preservar a integridade dos arquivos associados.
+- Cada usuário deve acessar exclusivamente seus próprios dados.
 
-### Etapa 2 — subetapas
+---
 
-| Sub | Status | Resumo |
-|---|---|---|
-| 2.1 Tela principal e pilha | CONCLUÍDA | Especificação validada pelo usuário em 11/10/2026. |
+## 4. Dados, persistência e sincronização
 
-| 2.2 Modelo e regras de negócio | CONCLUÍDA | Modelo `Card` em `src/types/card.ts` (frente: string HTML; verso: `BackItem[]`); ordenação, descarte e nome provisório implementados. Teste em dispositivo pendente junto com 2.9. |
+O Supabase é responsável pelos serviços de backend e pela persistência na nuvem.
 
-| 2.3 Criação, abertura, edição e rotação | CONCLUÍDA | Botão `+`, abertura em edição, pilha, favoritos, rotação 3D. Teste em dispositivo pendente junto com 2.9. |
+### Banco de dados
 
-| 2.4 Frente: editor e formatação | CONCLUÍDA | Mini editor rico WYSIWYG (pell + WebView) com barra conforme `especificacao_mini_editor.md` (A+/A− removidos); `Card.front` como HTML. Teste em dispositivo pendente junto com 2.9. |
+- Utilizar PostgreSQL para os dados dos cartões.
+- Associar cada cartão ao usuário proprietário por meio de `user_id`.
+- Aplicar políticas RLS para isolamento dos dados.
+- Preservar relacionamentos e integridade dos registros.
 
-| 2.5 Verso: anotações, fotos e áudio | CONCLUÍDA | Notas, fotos (galeria) e áudio (gravação/reprodução); arquivos em `documentDirectory`. Teste em dispositivo pendente junto com 2.9. Sync com Storage fica na 2.6. |
+### Arquivos e mídias
 
-| 2.6 Dados, sincronização e offline | NÃO INICIADA | PostgreSQL + RLS por usuário, cartões por `uid`, cache local + fila de sincronização (Supabase não tem offline automático), Storage para fotos/áudios, salvamento automático, erros de rede. **Aguardando autorização.** |
+- Utilizar Supabase Storage para fotografias e gravações de áudio.
+- Não armazenar arquivos de mídia diretamente como conteúdo binário no PostgreSQL.
+- Manter referências aos arquivos nos registros correspondentes.
+- Tratar exclusões de arquivos e registros para evitar arquivos órfãos, tanto no aparelho quanto no Storage.
+- A remoção de um item ou de um cartão deve apagar a mídia correspondente; exclusões feitas offline entram em fila local e são aplicadas na próxima sincronização.
 
-| 2.7 Busca, favoritos e estados vazios | PARCIAL | Busca, filtro de favoritos e estados vazios da pilha já funcionam na tela principal. Falta: banner do cartão de emergência e testes. |
+### Funcionamento offline
 
-| 2.8 Exclusão e integridade | PARCIAL | Exclusão com confirmação já existe. Falta: tratar arquivos órfãos (foto/áudio de cartão excluído) e testar isolamento por usuário (depende da 2.6). |
+A arquitetura deve contemplar:
 
-| 2.9 Testes integrados e encerramento | NÃO INICIADA | Bateria final em dispositivo (criação, edição, rotação, favoritos, ordenação, busca, exclusão, editor, checklist, tabela, mídias, offline) + correções + encerramento da etapa. |
+- Cache local dos cartões.
+- Fila de operações pendentes de sincronização.
+- Recuperação após perda de conexão.
+- Sincronização quando a conexão for restabelecida.
+- Tratamento de conflitos entre alterações locais e remotas.
 
-### Regras de encerramento
+O Supabase não deve ser considerado um mecanismo de sincronização offline automática. Essa funcionalidade depende da implementação específica do aplicativo.
 
-Uma etapa só vira `CONCLUÍDA` quando as tarefas foram executadas (ou exceções autorizadas), os testes aplicáveis foram executados e registrados, os documentos refletem o estado real sem instruções obsoletas, as pendências estão listadas e o usuário recebeu o resumo. Ao concluir, **parar e aguardar autorização** antes da próxima etapa.
+---
+
+## 5. Etapas do desenvolvimento
+
+### Etapa 1 — Autenticação
+
+Escopo:
+- Cadastro.
+- Login.
+- Logout.
+- Recuperação de senha.
+- Persistência de sessão.
+- Proteção de rotas.
+- Login Google.
+
+### Etapa 2 — Cartões e funcionalidades
+
+**2.1 — Tela principal e pilha de cartões**
+
+**2.2 — Modelo de dados e regras de negócio**
+
+**2.3 — Criação, abertura, edição e rotação**
+
+**2.4 — Frente: editor de texto rico e formatação**
+
+**2.5 — Verso: anotações, fotografias e áudio**
+
+**2.6 — Persistência, sincronização e funcionamento offline**
+
+**2.7 — Busca, favoritos, estados vazios e cartão de emergência**
+
+**2.8 — Exclusão e integridade dos arquivos**
+
+**2.9 — Testes integrados e encerramento da etapa**
+
+### Etapa 3 — Builds e distribuição
+
+Escopo:
+- Revisão dos identificadores do aplicativo.
+- Revisão das permissões Android e iOS.
+- Verificação das políticas RLS.
+- Geração de builds de desenvolvimento e produção.
+- Testes em dispositivos Android e iPhone.
+- Validação do login Google em build nativo.
+- Preparação para distribuição e publicação, mediante autorização.
+
+---
+
+## 6. Critérios de conclusão
+
+Uma etapa somente deve ser considerada concluída quando:
+
+1. Os requisitos previstos tiverem sido implementados ou suas exceções autorizadas.
+2. Os testes aplicáveis tiverem sido executados.
+3. Os resultados dos testes estiverem registrados.
+4. As pendências restantes estiverem identificadas.
+5. A documentação refletir o estado real do aplicativo.
+6. Não existirem instruções obsoletas que possam induzir a implementação incorreta.
+
+A conclusão de uma etapa não autoriza automaticamente o início da seguinte.
+
+O usuário deve receber um resumo do trabalho realizado e decidir sobre a continuidade.
+
+---
+
+## 7. Documentação do projeto
+
+Os documentos possuem responsabilidades distintas:
+
+### AGENTS.md
+Contém as instruções permanentes para o agente de desenvolvimento: segurança, comportamento, proteção dos dados, Git, dependências e forma de trabalhar.
+
+### PROJECT.md
+Este documento. Contém a definição do produto, arquitetura, requisitos funcionais, regras de negócio e planejamento das etapas.
+
+### CHANGELOG.md
+Contém o histórico objetivo e o estado atual do desenvolvimento, incluindo:
+
+- Funcionalidades implementadas.
+- Alterações realizadas.
+- Testes executados e respectivos resultados.
+- Pendências.
+- Problemas conhecidos.
+- Etapas concluídas ou em andamento.
+
+O `CHANGELOG.md` é a referência para verificar o que está efetivamente implementado. O `PROJECT.md` é a referência para verificar o que o aplicativo deve fazer.
+
+### Documentos técnicos complementares
+
+As especificações detalhadas aprovadas, como `especificacao_mini_editor.md`, devem ser preservadas e consultadas quando a tarefa envolver seus respectivos recursos.

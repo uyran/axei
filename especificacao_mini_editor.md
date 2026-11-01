@@ -1,92 +1,78 @@
-# Especificação Técnica – Mini Editor de Texto e Menus do Verso do Cartão
+# Especificação técnica — Mini editor da frente e barra do verso do cartão
 
-> **Contexto**: Projeto React Native (Expo SDK 57) com TypeScript.  
-> **Objetivo**: Reproduzir exatamente o mini editor de texto rico e o sistema de menus presentes no verso (back) do cartão.
+> **Contexto:** aplicativo Axei, React Native com Expo SDK 57 e TypeScript.
+> **Backend:** Supabase (PostgreSQL + Storage).
+> **Revisão:** 31/10/2026. Este documento descreve a implementação atual; as decisões que alteraram a versão de 11/10/2026 estão registradas no `CHANGELOG.md`.
 
 ---
 
-## 1. Dependências Necessárias
+## 1. Dependências
 
 ```json
 {
   "react-native-pell-rich-editor": "^1.10.0",
   "react-native-webview": "13.16.1",
   "react-native-reanimated": "4.5.1",
-  "expo-crypto": "~57.0.3"
+  "expo-audio": "~57.0.5",
+  "expo-image-picker": "~57.0.20",
+  "expo-file-system": "~57.0.7"
 }
 ```
 
-A lib `react-native-pell-rich-editor` fornece o componente `RichEditor` (editor WYSIWYG via WebView) e o enum `actions` para enviar comandos de formatação.
+`react-native-pell-rich-editor` fornece o `RichEditor` (WYSIWYG via WebView) e o enum `actions`.
+
+`expo-crypto` **não** é utilizado: os identificadores são gerados por `generateId` em `src/utils/cards.ts`.
 
 ---
 
-## 2. Arquitetura de Componentes
+## 2. Arquitetura dos componentes
 
 ```
-CardEditor (tela principal)
-├── CardFlip (animação de virar cartão com Reanimated)
-│   ├── CardFront (frente: nome + editor RichEditor + CardContentEditor)
-│   └── CardBack (verso: controles + lista de blocos)
-│       ├── CardPhotoBlock
-│       ├── CardAudioBlock
-│       └── CardTextBlock (bloco de anotação simples, TextInput)
-├── FormattingToolbar (barra de ferramentas do editor rico – FRENTE)
-└── TableBlock (botão de inserir/editar tabelas – FRENTE)
+src/app/card/[id].tsx  (rota /card/[id])
+├── CardBackground        (fundo Material You a partir de card.backgroundSeed)
+├── ContentEditor         (RichEditor da frente)
+├── FormattingToolbar     (barra da frente)
+├── TableBlock            (menu de tabela da frente)
+└── BackEditor            (nota, foto e áudio)
 ```
 
-### Regra importante
-A `FormattingToolbar` e o `TableBlock` são exibidos **apenas na FRENTE** do cartão (quando `isBack === false`). O verso do cartão (`CardBack`) usa um sistema diferente: blocos independentes (foto, áudio, texto simples).
+### Regra de exibição
+
+- `FormattingToolbar` e `TableBlock` existem **apenas na face frontal**, no rodapé da frente e **dentro do cartão**.
+- A face traseira não renderiza a barra de formatação; ela tem barra própria (Nota / Foto / Gravar).
+- As duas faces são `Animated.View` absolutas e giram juntas no eixo Y.
 
 ---
 
-## 3. O CardEditor – Componente Pai
+## 3. Tela do cartão — `src/app/card/[id].tsx`
 
-O `CardEditor` é o container de tudo. Ele:
-- Cria a `ref` do `RichEditor` (`editorRef`) e a passa para baixo.
-- Gerencia o estado `isBack` para controlar se mostra a toolbar ou não.
-- Quando `isBack === false` (frente visível), renderiza `FormattingToolbar` + `TableBlock` no rodapé.
+- **Barra superior** (fora do cartão): voltar, ícone do Axei e botão de opções (exclusão com confirmação).
+- **Faixa da frente**: salvar (esquerda), nome centralizado, girar (direita).
+- **Faixa do verso**: ícone, título "Verso" centralizado, girar (direita).
+- Nome: `TextInput` centralizado; placeholder `Nome do cartão`; ao focar, o cursor vai para o início sem deslocar o texto.
+- Salvar: recolhe o teclado e remove a seleção forçada.
+- Girar: anima `rotation` de 0 → 180 (ou 180 → 0) em **450 ms** com `withTiming`, aplicando `perspective: 1000` e `rotateY`.
+- O `zIndex` alterna em 90° para a face correta ficar na frente.
+- O cartão de emergência usa nome em vermelho (`EMERGENCY_COLOR`).
+- O menu de exclusão fica no canto superior direito da tela, fora do conteúdo do cartão.
+
+---
+
+## 4. Editor rico da frente — `src/components/card/content-editor.tsx`
 
 ```tsx
-// Trecho simplificado de CardEditor.tsx
-const editorRef = useRef<RichEditor>(null);
-const [isBack, setIsBack] = useState(false);
-
-return (
-  <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-    {/* ... navegação ... */}
-    
-    <ScrollView keyboardShouldPersistTaps="handled">
-      <CardFlip
-        editorRef={editorRef}
-        onFaceChange={setIsBack}
-        {/* ... outras props ... */}
-      />
-    </ScrollView>
-
-    {/* Toolbar só aparece na FRENTE do cartão */}
-    {!isBack && (
-      <View style={styles.tools}>
-        <FormattingToolbar editorRef={editorRef} />
-        <TableBlock editorRef={editorRef} />
-      </View>
-    )}
-  </KeyboardAvoidingView>
-);
-
-// styles.tools:
-// { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingBottom: Platform.OS === 'android' ? 24 : 12 }
-```
-
----
-
-## 4. O Editor Rico (RichEditor) – `CardContentEditor`
-
-Na **frente** do cartão, o conteúdo é editado por um `RichEditor` da lib `react-native-pell-rich-editor`. Ele é wrapper no componente `CardContentEditor`:
-
-```tsx
+import type { RefObject } from 'react';
 import { RichEditor } from 'react-native-pell-rich-editor';
 
-export function CardContentEditor({ content, editorRef, onChange, onCursorPosition, onHeightChange }) {
+import { normalizeCardContent } from '@/utils/card-html';
+
+type ContentEditorProps = {
+  content: string;
+  editorRef: RefObject<RichEditor | null>;
+  onChange: (html: string) => void;
+};
+
+export function ContentEditor({ content, editorRef, onChange }: ContentEditorProps) {
   return (
     <RichEditor
       ref={editorRef}
@@ -100,17 +86,14 @@ export function CardContentEditor({ content, editorRef, onChange, onCursorPositi
         placeholderColor: '#6E737A',
         contentCSSText: `
           font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 22px;
+          font-size: 16px;
           line-height: 1.5;
           padding: 0;
           min-height: 260px;
         `,
         cssText: `
-          .pell-content, .pell-content p, .pell-content div,
-          .pell-content li, .pell-content td, .pell-content blockquote,
-          .pell-content span { font-size: 22px !important; }
-          .pell-content h1, .pell-content h1 * { font-size: 24px !important; line-height: 1.3; }
-          .pell-content h2, .pell-content h2 * { font-size: 22px !important; line-height: 1.3; }
+          .pell-content h1 { font-size: 24px; line-height: 1.3; }
+          .pell-content h2 { font-size: 18px; line-height: 1.3; }
           h1 { margin: 0 0 10px; font-weight: 700; }
           h2 { margin: 10px 0 6px; font-weight: 600; }
           p  { margin: 0 0 8px; }
@@ -119,35 +102,31 @@ export function CardContentEditor({ content, editorRef, onChange, onCursorPositi
         `,
       }}
       initialContentHTML={normalizeCardContent(content)}
-      initialHeight={300}
+      initialHeight={260}
       onChange={onChange}
-      onCursorPosition={onCursorPosition}
-      onHeightChange={onHeightChange}
       pasteAsPlainText
-      placeholder="Conteúdo livre..."
-      style={{ flex: 1, minHeight: 300, backgroundColor: 'transparent' }}
+      placeholder="Escreva aqui o conteúdo da frente do cartão"
+      style={{ flex: 1, minHeight: 220, backgroundColor: 'transparent' }}
+      useContainer={false}
     />
   );
 }
 ```
 
-### Utilitário `normalizeCardContent`
+- O conteúdo é armazenado como HTML em `Card.front`.
+- `useContainer={false}` mantém a rolagem dentro do WebView.
+- Não são usados `onCursorPosition` nem `onHeightChange`.
+- O editor fica dentro de uma caixa com borda (`editorBox`) na face frontal.
 
-Converte texto puro legado em HTML (transforma a primeira linha em `<h1>` e as demais em `<p>`). Se já for HTML, retorna sem alteração.
+### Normalização — `src/utils/card-html.ts`
+
+`normalizeCardContent` mantém HTML existente e converte texto puro legado em `<h1>` + `<p>`. Conteúdo vazio retorna `''`.
 
 ```ts
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i;
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
 export function normalizeCardContent(content: string) {
+  if (content.trim() === '') return '';
   if (HTML_TAG_PATTERN.test(content)) return content;
 
   const lines = content.split(/\r?\n/);
@@ -160,515 +139,142 @@ export function normalizeCardContent(content: string) {
 }
 ```
 
+O mesmo arquivo exporta `TABLE_2X2_HTML`.
+
 ---
 
-## 5. FormattingToolbar – Barra de Ferramentas de Formatação
+## 5. `FormattingToolbar`
 
-Uma barra horizontal com scroll que aparece no rodapé e controla o `RichEditor` via `editorRef`.
+Barra horizontal com rolagem, exibida no rodapé da frente.
 
-### Funcionalidades
+| Botão | Rótulo visual | Ação |
+|---|---|---|
+| Estilo do texto | `Aa` | submenu “Título” (`heading1`) / “Subtítulo” (`heading2`) |
+| Negrito | `B` | `setBold` |
+| Lista | `☷` | submenu Marcadores / Numerada / Checklist |
+| Cor | `A` sublinhado | paleta de 6 cores |
+| Desfazer | `↶` | `undo` |
 
-| Botão | Label visual | Ação |
-|-------|-------------|------|
-| **Aa** (estilo texto) | Abre sub-menu com "Título" (h1) e "Subtítulo" (h2) | `actions.heading1` / `actions.heading2` |
-| **B** (negrito) | Texto em negrito | `actions.setBold` |
-| *I* (itálico) | Texto em itálico | `actions.setItalic` |
-| **☷** (lista) | Abre sub-menu com 3 tipos de lista | `actions.insertBulletsList` / `actions.insertOrderedList` / `actions.checkboxList` |
-| **A** (cor) | Abre paleta de 6 cores | `editorRef.current.setForeColor(color)` |
-| **↶** (desfazer) | Undo | `actions.undo` |
-| **↷** (refazer) | Redo | `actions.redo` |
+**Itálico (`I`) e refazer (`↷`) não existem na barra** — decisão confirmada em 31/10/2026.
 
-### Mecânica dos Sub-menus
+- Submenus mutuamente exclusivos, abertos acima da barra:
+  - estilo do texto: `bottom: 60`, `left: 4`;
+  - lista: `bottom: 60`, `left: 118`;
+  - cores: `bottom: 60`, `right: 4`.
+- Paleta: `#202124`, `#176B5B`, `#A33A2B`, `#315CA8`, `#FF0000`, `#FFEB3B`.
+- Dimensões: barra com 70 de altura; botões 42 × 44, raio 8, borda preta, fundo `#DBEAFE`.
+- Ícones: estilo `#7C3AED`, negrito `#2563EB`, lista `#0D9488`, cor `#8B5CF6`, desfazer `#176B5B`.
+- Estado ativo: o ícone fica branco e o fundo permanece `#DBEAFE` (contraste baixo; ajuste pendente).
+- `keyboardShouldPersistTaps="always"` para não fechar o teclado ao tocar na barra.
+- Componente: `src/components/card/formatting-toolbar.tsx`.
 
-Há 3 sub-menus que são **mutuamente exclusivos** (abrir um fecha os outros):
-1. **Menu de Estilo de Texto** (`isTextStyleMenuOpen`) – posição: `bottom: 60, left: 4`
-2. **Menu de Lista** (`isListMenuOpen`) – posição: `bottom: 60, left: 118`
-3. **Menu de Cores** (`isColorMenuOpen`) – posição: `bottom: 60, right: 4`
+---
 
-Cada toggle fecha os outros dois antes de abrir/fechar o seu:
-```tsx
-const toggleTextStyleMenu = () => {
-  setIsColorMenuOpen(false);
-  setIsListMenuOpen(false);
-  setIsTextStyleMenuOpen((open) => !open);
+## 6. `TableBlock`
+
+Botão separado da barra principal, ao lado dela, com menu de três opções:
+
+| Opção | Ação |
+|---|---|
+| Nova 2×2 | insere `TABLE_2X2_HTML` via `insertHTML` |
+| + Linha | adiciona linha à tabela mais próxima do cursor |
+| + Coluna | adiciona coluna em todas as linhas da tabela |
+
+- Botão 42 × 44, fundo `#DBEAFE`, borda preta; ativo com fundo `#EA580C` e ícone branco.
+- Menu com `bottom: 60`, `right: 0`.
+- Inserção e manipulação usam `commandDOM` e `closest('table.find-table')`; sem tabela selecionada, usa a última do documento.
+- O CSS `.find-table` está em `ContentEditor`.
+- Componente: `src/components/card/table-block.tsx`.
+
+---
+
+## 7. Verso — `src/components/card/back-editor.tsx`
+
+### Modelo de dados — `src/types/card.ts`
+
+```ts
+export type BackItem =
+  | { id: string; type: 'note'; text: string; createdAt: string }
+  | { id: string; type: 'photo'; uri: string; createdAt: string }
+  | { id: string; type: 'audio'; uri: string; durationMs: number; createdAt: string };
+```
+
+O verso é um bloco independente; **não** usa `RichEditor`.
+
+### Lista de itens
+
+- Nota: `TextInput` multilinha e botão de remoção.
+- Foto: imagem com 180 de altura, rótulo "Foto" e remoção.
+- Áudio: play/pause, duração `m:ss` e remoção.
+- Verso vazio exibe texto orientando a usar a barra.
+
+### Barra do verso
+
+- **Nota**: adiciona um bloco de texto.
+- **Foto**: abre alerta com "Tirar foto", "Escolher da galeria" e "Cancelar".
+- **Gravar**: inicia a gravação; durante a gravação, um botão vermelho ocupa toda a largura da barra e mostra a duração em tempo real.
+- Botões com altura mínima de 44, fundo `#DBEAFE` e borda preta; a cor fica no ícone/rótulo: nota `#7C3AED`, foto `#2563EB`, gravar `#DC2626`.
+
+### Arquivos e permissões
+
+- Áudio gravado em `documentDirectory` (`useAudioRecorder` com `directory: 'document'`, preset `HIGH_QUALITY`).
+- Fotos copiadas para `documentDirectory/card-files/`.
+- Remover um item apaga a cópia **local** e enfileira a remoção do objeto no Storage (`media_outbox`, processada na sincronização). Excluir o cartão remove a pasta `userId/cardId/` inteira. Implementado em 31/10/2026.
+- Permissões negadas (câmera, galeria, microfone) geram alerta em português.
+- Permissões declaradas em `app.json`: `expo-audio` (microfone) e `expo-image-picker` (fotos e câmera). Em 31/10/2026 o `microphonePermission` do image-picker deixou de ser `false` para não remover `RECORD_AUDIO` do Android.
+
+### Sincronização de mídia
+
+- Fotos e áudios são enviados ao bucket privado `card-media`.
+- Após o upload, a URI local é substituída pelo caminho no Storage.
+- Uma cópia local é mantida em `media-cache/` e baixada sob demanda por `useMediaUri`.
+
+---
+
+## 8. Persistência do cartão
+
+```ts
+export type Card = {
+  id: string;
+  name: string;
+  favorite: boolean;
+  backgroundSeed: number;
+  front: string;
+  back: BackItem[];
+  createdAt: string;
 };
 ```
 
-### Paleta de Cores
-```ts
-const COLORS = ['#202124', '#176B5B', '#A33A2B', '#315CA8', '#FF0000', '#FFEB3B'];
-```
-Renderizada como uma row horizontal de swatches circulares (22×22, borderRadius: 11).
-
-### Código Completo da FormattingToolbar
-
-```tsx
-import React, { type RefObject, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { actions, RichEditor } from 'react-native-pell-rich-editor';
-
-interface FormattingToolbarProps {
-  editorRef: RefObject<RichEditor | null>;
-}
-
-const COLORS = ['#202124', '#176B5B', '#A33A2B', '#315CA8', '#FF0000', '#FFEB3B'];
-
-export function FormattingToolbar({ editorRef }: FormattingToolbarProps) {
-  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
-  const [isListMenuOpen, setIsListMenuOpen] = useState(false);
-  const [isTextStyleMenuOpen, setIsTextStyleMenuOpen] = useState(false);
-
-  const action = (type: actions) => {
-    editorRef.current?.sendAction(type, 'result');
-  };
-
-  const chooseTextStyle = (type: actions) => {
-    action(type);
-    setIsTextStyleMenuOpen(false);
-  };
-
-  const chooseList = (type: actions) => {
-    action(type);
-    setIsListMenuOpen(false);
-  };
-
-  const chooseColor = (color: string) => {
-    editorRef.current?.setForeColor(color);
-    setIsColorMenuOpen(false);
-  };
-
-  const toggleTextStyleMenu = () => {
-    setIsColorMenuOpen(false);
-    setIsListMenuOpen(false);
-    setIsTextStyleMenuOpen((open) => !open);
-  };
-
-  const toggleColorMenu = () => {
-    setIsListMenuOpen(false);
-    setIsTextStyleMenuOpen(false);
-    setIsColorMenuOpen((open) => !open);
-  };
-
-  const toggleListMenu = () => {
-    setIsColorMenuOpen(false);
-    setIsTextStyleMenuOpen(false);
-    setIsListMenuOpen((open) => !open);
-  };
-
-  return (
-    <View style={styles.container}>
-      {/* Sub-menu de cores – posicionado acima da toolbar */}
-      {isColorMenuOpen && (
-        <View accessibilityLabel="Cores do texto" style={styles.colorMenu}>
-          {COLORS.map((color) => (
-            <Pressable
-              accessibilityLabel={`Selecionar cor ${color}`}
-              accessibilityRole="button"
-              key={color}
-              onPress={() => chooseColor(color)}
-              style={styles.menuSwatchButton}
-            >
-              <View style={[styles.swatch, { backgroundColor: color }]} />
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {/* Sub-menu de estilo de texto */}
-      {isTextStyleMenuOpen && (
-        <View accessibilityLabel="Estilo do texto" style={styles.textStyleMenu}>
-          <Pressable onPress={() => chooseTextStyle(actions.heading1)} style={styles.textStyleItem}>
-            <Text style={styles.menuTitle}>Título</Text>
-          </Pressable>
-          <Pressable onPress={() => chooseTextStyle(actions.heading2)} style={styles.textStyleItem}>
-            <Text style={styles.menuSubtitle}>Subtítulo</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* Sub-menu de lista */}
-      {isListMenuOpen && (
-        <View accessibilityLabel="Tipos de lista" style={styles.listMenu}>
-          <Pressable onPress={() => chooseList(actions.insertBulletsList)} style={styles.listMenuItem}>
-            <Text style={styles.listMenuSymbol}>•</Text>
-            <Text style={styles.listMenuText}>Marcadores</Text>
-          </Pressable>
-          <Pressable onPress={() => chooseList(actions.insertOrderedList)} style={styles.listMenuItem}>
-            <Text style={styles.listMenuSymbol}>1.</Text>
-            <Text style={styles.listMenuText}>Numerada</Text>
-          </Pressable>
-          <Pressable onPress={() => chooseList(actions.checkboxList)} style={styles.listMenuItem}>
-            <Text style={styles.listMenuSymbol}>☑</Text>
-            <Text style={styles.listMenuText}>Checklist</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* Toolbar principal – ScrollView horizontal */}
-      <ScrollView
-        contentContainerStyle={styles.content}
-        horizontal
-        keyboardShouldPersistTaps="always"
-        showsHorizontalScrollIndicator={false}
-        style={styles.toolbar}
-      >
-        {/* Botão Estilo (Aa) */}
-        <Pressable
-          accessibilityLabel={isTextStyleMenuOpen ? 'Fechar estilos de texto' : 'Escolher estilo de texto'}
-          onPress={toggleTextStyleMenu}
-          style={[styles.button, isTextStyleMenuOpen && styles.activeButton]}
-        >
-          <Text style={styles.normalIcon}>Aa</Text>
-        </Pressable>
-
-        {/* Botão Negrito (B) */}
-        <Pressable accessibilityLabel="Negrito" onPress={() => action(actions.setBold)} style={styles.button}>
-          <Text style={styles.boldIcon}>B</Text>
-        </Pressable>
-
-        {/* Botão Itálico (I) */}
-        <Pressable accessibilityLabel="Itálico" onPress={() => action(actions.setItalic)} style={styles.button}>
-          <Text style={styles.italicIcon}>I</Text>
-        </Pressable>
-
-        {/* Botão Lista (☷) */}
-        <Pressable
-          accessibilityLabel={isListMenuOpen ? 'Fechar tipos de lista' : 'Escolher tipo de lista'}
-          onPress={toggleListMenu}
-          style={[styles.button, isListMenuOpen && styles.activeButton]}
-        >
-          <Text style={styles.listIcon}>☷</Text>
-        </Pressable>
-
-        <View style={styles.separator} />
-
-        {/* Botão Cor (A com sublinhado colorido) */}
-        <Pressable
-          accessibilityLabel={isColorMenuOpen ? 'Fechar cores do texto' : 'Escolher cor do texto'}
-          onPress={toggleColorMenu}
-          style={[styles.button, isColorMenuOpen && styles.activeButton]}
-        >
-          <View style={styles.colorIcon}>
-            <Text style={styles.colorLetter}>A</Text>
-            <View style={styles.colorUnderline} />
-          </View>
-        </Pressable>
-
-        <View style={styles.separator} />
-
-        {/* Botões Undo/Redo */}
-        <Pressable accessibilityLabel="Desfazer" onPress={() => action(actions.undo)} style={styles.button}>
-          <Text style={styles.historyIcon}>↶</Text>
-        </Pressable>
-        <Pressable accessibilityLabel="Refazer" onPress={() => action(actions.redo)} style={styles.button}>
-          <Text style={styles.historyIcon}>↷</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, position: 'relative', zIndex: 2 },
-  toolbar: {
-    flex: 1,
-    height: 54,
-    marginTop: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#C9CDD3',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  content: { alignItems: 'center', paddingHorizontal: 6 },
-  button: { width: 42, height: 48, alignItems: 'center', justifyContent: 'center' },
-  normalIcon: { color: '#25282E', fontSize: 16 },
-  boldIcon: { color: '#25282E', fontSize: 19, fontWeight: '800' },
-  italicIcon: { color: '#25282E', fontSize: 19, fontStyle: 'italic', fontWeight: '600' },
-  listIcon: { color: '#25282E', fontSize: 17, fontWeight: '600' },
-  historyIcon: { color: '#176B5B', fontSize: 23 },
-  activeButton: { backgroundColor: '#F1ECFF', borderRadius: 8 },
-  colorIcon: { alignItems: 'center', justifyContent: 'center' },
-  colorLetter: { color: '#25282E', fontSize: 18, fontWeight: '600', lineHeight: 20 },
-  colorUnderline: { width: 18, height: 3, marginTop: 2, borderRadius: 2, backgroundColor: '#8B5CF6' },
-  separator: { width: 1, height: 26, marginHorizontal: 4, backgroundColor: '#D8DBE0' },
-  swatch: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: '#C3C6CB' },
-  colorMenu: {
-    position: 'absolute', bottom: 60, right: 4, zIndex: 3,
-    flexDirection: 'row', padding: 5,
-    borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C9CDD3',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#202329', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.16, shadowRadius: 7, elevation: 7,
-  },
-  menuSwatchButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  textStyleMenu: {
-    position: 'absolute', bottom: 60, left: 4, zIndex: 3,
-    minWidth: 132, overflow: 'hidden',
-    borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C9CDD3',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#202329', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.16, shadowRadius: 7, elevation: 7,
-  },
-  textStyleItem: { minHeight: 42, paddingHorizontal: 14, justifyContent: 'center' },
-  menuTitle: { color: '#25282E', fontSize: 24, fontWeight: '700' },
-  menuSubtitle: { color: '#25282E', fontSize: 22, fontWeight: '600' },
-  listMenu: {
-    position: 'absolute', bottom: 60, left: 118, zIndex: 3,
-    minWidth: 146, overflow: 'hidden',
-    borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C9CDD3',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#202329', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.16, shadowRadius: 7, elevation: 7,
-  },
-  listMenuItem: { minHeight: 42, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  listMenuSymbol: { width: 22, color: '#176B5B', fontSize: 17, fontWeight: '700', textAlign: 'center' },
-  listMenuText: { color: '#25282E', fontSize: 14, fontWeight: '600' },
-});
-```
+- `BackEditor` recebe `back` e `onChange`; a tela chama `setCardBack(card.id, back)`.
+- `useCards` mantém o estado, grava no SQLite com debounce de 800 ms e enfileira no `outbox`.
+- A sincronização envia para `public.cards` (JSONB em `back`) e reconcilia exclusões por `user_id`.
 
 ---
 
-## 6. TableBlock – Inserção e Manipulação de Tabelas
-
-Botão quadrado (54×54) ao lado da `FormattingToolbar`. Abre um sub-menu com 3 opções:
-
-| Opção | Ação |
-|-------|------|
-| **Nova 2×2** | Insere uma tabela HTML 2×2 com classe `find-table` |
-| **+ Linha** | Adiciona uma linha na tabela mais próxima do cursor |
-| **+ Coluna** | Adiciona uma coluna em todas as linhas da tabela |
-
-### HTML da Tabela 2×2
-
-```html
-<table class="find-table">
-  <tbody>
-    <tr><td><br></td><td><br></td></tr>
-    <tr><td><br></td><td><br></td></tr>
-  </tbody>
-</table>
-<p><br></p>
-```
-
-### Manipulação via `commandDOM`
-
-Para adicionar linhas/colunas, o componente usa `editorRef.current.commandDOM(jsString)` que executa JavaScript dentro do WebView do editor. O código:
-1. Localiza a tabela via `element.closest('table.find-table')` a partir da seleção atual.
-2. Se não encontra pelo cursor, usa a última tabela no documento.
-3. Insere row/column e dispara evento `input` para sincronizar.
-
-```tsx
-import React, { type RefObject, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { RichEditor } from 'react-native-pell-rich-editor';
-
-export const TABLE_2X2_HTML = `
-  <table class="find-table">
-    <tbody>
-      <tr><td><br></td><td><br></td></tr>
-      <tr><td><br></td><td><br></td></tr>
-    </tbody>
-  </table>
-  <p><br></p>
-`;
-
-export function TableBlock({ editorRef }: { editorRef: RefObject<RichEditor | null> }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const insertTable = () => {
-    editorRef.current?.insertHTML(TABLE_2X2_HTML);
-    setIsMenuOpen(false);
-  };
-
-  const changeCurrentTable = (operation: 'row' | 'column') => {
-    const mutation = operation === 'row'
-      ? `var row=document.createElement('tr'); var count=table.rows[0] ? table.rows[0].cells.length : 2; for(var i=0;i<count;i++){var cell=document.createElement('td');cell.innerHTML='<br>';row.appendChild(cell);} table.tBodies[0].appendChild(row);`
-      : `Array.from(table.rows).forEach(function(row){var cell=document.createElement('td');cell.innerHTML='<br>';row.appendChild(cell);});`;
-
-    editorRef.current?.commandDOM(`
-      var selection=document.getSelection();
-      var node=selection && selection.anchorNode;
-      var element=node && (node.nodeType===1 ? node : node.parentElement);
-      var table=element && element.closest ? element.closest('table.find-table') : null;
-      if(!table){var tables=document.querySelectorAll('table.find-table');table=tables[tables.length-1];}
-      if(table){${mutation} var root=$('[contenteditable="true"]');if(root){root.dispatchEvent(new Event('input',{bubbles:true}));}}
-    `);
-    setIsMenuOpen(false);
-  };
-
-  return (
-    <View style={styles.container}>
-      {isMenuOpen && (
-        <View style={styles.menu}>
-          <Pressable onPress={insertTable} style={styles.menuItem}>
-            <Text style={styles.menuText}>Nova 2×2</Text>
-          </Pressable>
-          <Pressable onPress={() => changeCurrentTable('row')} style={styles.menuItem}>
-            <Text style={styles.menuText}>+ Linha</Text>
-          </Pressable>
-          <Pressable onPress={() => changeCurrentTable('column')} style={styles.menuItem}>
-            <Text style={styles.menuText}>+ Coluna</Text>
-          </Pressable>
-        </View>
-      )}
-      <Pressable
-        accessibilityLabel={isMenuOpen ? 'Fechar opções de tabela' : 'Opções de tabela'}
-        onPress={() => setIsMenuOpen((open) => !open)}
-        style={({ pressed }) => [styles.button, (pressed || isMenuOpen) && styles.pressed]}
-      >
-        <Text style={styles.icon}>▦</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { position: 'relative', zIndex: 3 },
-  button: {
-    width: 54, height: 54, marginTop: 12, marginLeft: 8,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth, borderColor: '#C9CDD3', borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  pressed: { backgroundColor: '#E8F2EF' },
-  icon: { color: '#176B5B', fontSize: 27, lineHeight: 30 },
-  menu: {
-    position: 'absolute', right: 0, bottom: 60,
-    minWidth: 112, overflow: 'hidden',
-    borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: '#C9CDD3',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#202329', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.16, shadowRadius: 7, elevation: 7,
-  },
-  menuItem: { minHeight: 42, paddingHorizontal: 14, justifyContent: 'center' },
-  menuText: { color: '#25282E', fontSize: 14, fontWeight: '600' },
-});
-```
-
----
-
-## 7. O Verso do Cartão – `CardBack`
-
-O verso NÃO usa o RichEditor. Ele usa **blocos independentes** (foto, áudio, texto). Cada bloco é um item do tipo `CardBackItem`:
-
-```ts
-export type CardBackItemType = 'photo' | 'audio' | 'text';
-
-export interface CardBackItem {
-  id: string;
-  cardId: string;
-  type: CardBackItemType;
-  content: string;       // URI da foto/áudio, ou texto da anotação
-  caption?: string | null;
-  createdAt: number;
-}
-```
-
-### Barra de controles do verso
-
-3 botões à esquerda + 1 botão de flip à direita:
-
-| Botão | Emoji | Ação |
-|-------|-------|------|
-| 📷 | Foto | Abre sub-menu com "Câmera" e "Galeria" |
-| 🎤 | Áudio | Adiciona bloco de áudio |
-| 📝 | Texto | Adiciona bloco de anotação |
-| ↻ | Flip | Volta para a frente |
-
-O sub-menu de foto é um popover com 3 opções (Câmera, Galeria, Cancelar), posicionado abaixo do botão.
-
-### Bloco de Texto Simples (`CardTextBlock`)
-
-O bloco de anotação de texto do **verso** é um `TextInput` multiline simples (NÃO usa RichEditor), com visual de "papel pautado":
-
-```tsx
-export function CardTextBlock({ item, onContentChange, onDelete }) {
-  const [inputHeight, setInputHeight] = useState(48);
-  const ruledLines = useMemo(
-    () => Array.from({ length: Math.max(2, Math.ceil(inputHeight / 22)) }),
-    [inputHeight]
-  );
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.leftRow}>
-          <Text style={styles.icon}>📝</Text>
-          <Text style={styles.title}>Anotação</Text>
-        </View>
-        <Pressable onPress={onDelete} style={styles.deleteButton}>
-          <Text style={styles.deleteText}>✕</Text>
-        </Pressable>
-      </View>
-      <View style={styles.ruledPaper}>
-        {/* Linhas decorativas por trás do texto */}
-        <View pointerEvents="none" style={styles.linesContainer}>
-          {ruledLines.map((_, index) => <View key={index} style={styles.ruledLine} />)}
-        </View>
-        <TextInput
-          multiline
-          onChangeText={onContentChange}
-          onContentSizeChange={({ nativeEvent }) => {
-            setInputHeight(Math.max(48, Math.ceil(nativeEvent.contentSize.height)));
-          }}
-          placeholder="Digite sua anotação..."
-          placeholderTextColor="#737980"
-          scrollEnabled={false}
-          style={[styles.textInput, { minHeight: inputHeight }]}
-          value={item.content}
-        />
-      </View>
-    </View>
-  );
-}
-```
-
-Estilos do papel pautado:
-- `ruledPaper`: `position: 'relative'`, `backgroundColor: 'rgba(0, 0, 0, 0.025)'`, `borderRadius: 6`
-- `ruledLine`: `height: 22`, `borderBottomWidth: StyleSheet.hairlineWidth`, `borderBottomColor: 'rgba(74, 108, 137, 0.24)'`
-- `textInput`: `fontSize: 15`, `lineHeight: 22` (alinha com as linhas pautadas)
-
----
-
-## 8. Hook `useCardBackItems`
-
-Gerencia o CRUD dos blocos do verso, usando Firestore como backend:
-
-```ts
-export function useCardBackItems(cardId: string) {
-  const [items, setItems] = useState<CardBackItem[]>([]);
-  const [isBusy, setIsBusy] = useState(false);
-
-  // Carrega itens ao montar
-  // addPhotoItem(source: 'camera' | 'library') – tira/escolhe foto e persiste
-  // addAudioItem() – cria bloco de áudio vazio
-  // addTextItem() – cria bloco de texto vazio
-  // updateItemContent(id, content) – atualiza conteúdo
-  // updateItemCaption(id, caption) – atualiza legenda (fotos)
-  // removeItem(item) – remove item e deleta arquivo se foto/áudio
-
-  return { items, isBusy, addPhotoItem, addAudioItem, addTextItem, updateItemContent, updateItemCaption, removeItem };
-}
-```
-
----
-
-## 9. Paleta de Cores Completa do Sistema
+## 9. Paleta atual
 
 | Token | Hex | Uso |
-|-------|-----|-----|
-| Verde primário | `#176B5B` | Ícones de ação, caret, undo/redo, símbolos de lista |
-| Texto primário | `#25282E` / `#282C32` | Texto do editor e menus |
-| Texto secundário | `#6E737A` | Placeholders, botão cancelar |
-| Roxo ativo | `#F1ECFF` | Background do botão ativo na toolbar |
-| Roxo indicador | `#8B5CF6` | Sublinhado do botão de cor |
-| Verde claro ativo | `#E8F2EF` | Background ativo no menu de foto / TableBlock |
-| Borda menu | `#C9CDD3` | Borda de menus flutuantes e toolbar |
-| Separador | `#D8DBE0` | Linha vertical separadora na toolbar |
-| Vermelho excluir | `#B42318` | Botão excluir |
-| Sombra | `#202329` | shadowColor de todos os menus flutuantes |
+|---|---|---|
+| Primário | `#208AEF` | ícones de navegação, FAB |
+| Texto | `#111827` | texto principal |
+| Texto secundário | `#6B7280` | placeholders e legendas |
+| Borda | `#D1D5DB` / `#9CA3AF` | bordas de caixas e divisores |
+| Fundo | `#F6F7F9` | fundo das telas |
+| Emergência/favorito | `#DC2626` | nome do cartão de emergência e estrela |
+| Botões de barra | `#DBEAFE` | fundo dos botões (frente e verso) |
+| Estilo | `#7C3AED` | Aa e nota |
+| Formatação | `#2563EB` | B e foto |
+| Lista | `#0D9488` | ☷ |
+| Cor | `#8B5CF6` | A |
+| Desfazer | `#176B5B` | ↶ |
+| Tabela | `#EA580C` | ▦ |
+| Gravação | `#DC2626` | botão de gravar e barra de gravação |
+| Busca | `#c0def3` | fundo da barra de pesquisa |
+| Menus | `#FFFFFF` / `#C9CDD3` / `#202329` | fundo, borda e sombra |
 
 ---
 
-## 10. Padrão de Menus Flutuantes
-
-Todos os menus popup do projeto seguem o mesmo padrão visual:
+## 10. Padrão de menus flutuantes
 
 ```ts
 {
@@ -682,20 +288,31 @@ Todos os menus popup do projeto seguem o mesmo padrão visual:
   shadowOffset: { width: 0, height: 3 },
   shadowOpacity: 0.16,
   shadowRadius: 7,
-  elevation: 7,    // Android
+  elevation: 7,
 }
 ```
 
-- Menus são posicionados via `bottom`/`top` + `left`/`right` relativo ao container pai com `position: 'relative'`
-- Itens de menu têm `minHeight: 42` e `paddingHorizontal: 12-14`
-- Texto de menu: `fontSize: 14`, `fontWeight: '600'`, `color: '#25282E'`
-- Abrir um menu fecha todos os outros (mutuamente exclusivos)
+- Posicionados por `bottom` + `left`/`right` em relação ao container.
+- Itens com `minHeight: 42` e `paddingHorizontal: 12–14`.
+- Texto de menu: `fontSize: 14`, `fontWeight: '600'`, `color: '#25282E'`.
+- Abrir um menu fecha os outros dentro do mesmo componente.
+- O tamanho padrão do texto é 22 px; Título (`h1`) usa 24 px e Subtítulo (`h2`) usa 22 px.
 
 ---
 
-## 11. Resumo do Fluxo Completo
+## 11. Fluxo resumido
 
-1. O `CardEditor` renderiza o `CardFlip` (animação 3D de flip com Reanimated).
-2. **FRENTE**: Mostra `CardFront` → contém `CardContentEditor` (RichEditor WYSIWYG). A `FormattingToolbar` + `TableBlock` ficam fora do cartão, no rodapé da tela, e operam via `editorRef`.
-3. **VERSO**: Mostra `CardBack` → barra de controles no topo (📷 🎤 📝 ↻) + lista de blocos. Cada bloco é independente (`CardTextBlock` usa `TextInput` simples, não o RichEditor). Quando o verso está visível, a `FormattingToolbar` e o `TableBlock` são ocultados.
-4. Todos os menus são popups absolutos com sombra, mutuamente exclusivos dentro de seu componente.
+1. A rota `card/[id]` carrega o cartão do cache/provider.
+2. A face frontal exibe nome, editor rico e a barra de formatação **dentro do cartão**.
+3. A rotação de 450 ms alterna frente e verso.
+4. No verso, a barra oferece Nota, Foto (câmera ou galeria) e Gravar.
+5. Toda edição atualiza o estado, persiste no SQLite e entra na fila de sincronização.
+
+---
+
+## 12. Pendências conhecidas
+
+- Contraste do estado ativo da barra.
+- Efeitos sonoros em `assets/sounds/` ainda não rastreados no Git.
+- `media-cache/` e `card-files/` não são limpos no logout (proposta registrada no `CHANGELOG.md`).
+- Cartão de emergência legado (`id = 'emergency'`) preso na fila de um segundo usuário precisa de migração manual.
