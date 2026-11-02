@@ -1,5 +1,4 @@
 import { makeRedirectUri } from 'expo-auth-session';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -31,6 +30,20 @@ function describeUrl(url: string): string {
 
 function isAuthRedirectUrl(url: string): boolean {
   return /(access_token|refresh_token|error|code)=/.test(url);
+}
+
+function getAuthRedirectParams(url: string): {
+  params: Record<string, string>;
+  errorCode: string | null;
+} {
+  const parsedUrl = new URL(url, 'https://phony.example');
+  const params = Object.fromEntries(parsedUrl.searchParams.entries());
+  new URLSearchParams(parsedUrl.hash.replace(/^#/, '')).forEach((value, key) => {
+    params[key] = value;
+  });
+  const errorCode = params.errorCode ?? null;
+  delete params.errorCode;
+  return { params, errorCode };
 }
 
 let pendingRedirect: ((url: string) => void) | null = null;
@@ -105,7 +118,7 @@ export async function signInWithGoogle(): Promise<AuthResult> {
   }
 
   if (__DEV__) console.log(`[google-auth] retorno url=${describeUrl(finalUrl)}`);
-  const { params, errorCode } = QueryParams.getQueryParams(finalUrl);
+  const { params, errorCode } = getAuthRedirectParams(finalUrl);
   if (__DEV__) {
     console.log(
       `[google-auth] params keys=${Object.keys(params).join(',')} errorCode=${errorCode ?? 'none'}`,

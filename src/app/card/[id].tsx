@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useAudioPlayer } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
+import type { ComponentRef } from 'react';
 import {
   Alert,
   Keyboard,
@@ -41,16 +42,18 @@ const FLIP_DURATION_MS = 450;
 
 export default function CardDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const navigation = useNavigation();
   const { getCard, setCardName, setCardFront, setCardBack, deleteCard } = useCards();
   const { soundsEnabled } = useAppSound();
 
   const card = getCard(id);
+  const shouldPreventRemove = Boolean(
+    card && (!hasSignificantContent(card) || card.name.trim() === ''),
+  );
   const [nameSelection, setNameSelection] = useState<{ start: number; end: number } | undefined>(
     undefined,
   );
   const nameSelectionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nameInputRef = useRef<TextInput>(null);
+  const nameInputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const editorRef = useRef<RichEditor>(null);
 
   useEffect(() => {
@@ -99,41 +102,35 @@ export default function CardDetailScreen() {
     }
   }, [card]);
 
-  useEffect(() => {
-    const subscription = navigation.addListener('beforeRemove', (event) => {
-      const currentCard = getCard(id);
-      if (!currentCard) {
-        return;
-      }
-      if (!hasSignificantContent(currentCard)) {
-        deleteCard(id);
-        return;
-      }
-      if (currentCard.name.trim() === '') {
-        event.preventDefault();
-        Alert.alert(
-          'Dá um nome ao cartão',
-          'Este cartão tem conteúdo, mas ainda não tem nome. O que deseja fazer?',
-          [
-            { text: 'Continuar editando', style: 'cancel' },
-            {
-              text: 'Manter como “Sem título”',
-              onPress: () => navigation.dispatch(event.data.action),
-            },
-            {
-              text: 'Descartar cartão',
-              style: 'destructive',
-              onPress: () => {
-                deleteCard(id);
-                navigation.dispatch(event.data.action);
-              },
-            },
-          ],
-        );
-      }
-    });
-    return subscription;
-  }, [navigation, id, getCard, deleteCard]);
+  usePreventRemove(shouldPreventRemove, ({ repeat }) => {
+    if (!card) {
+      return;
+    }
+    if (!hasSignificantContent(card)) {
+      deleteCard(id);
+      repeat();
+      return;
+    }
+    Alert.alert(
+      'Dá um nome ao cartão',
+      'Este cartão tem conteúdo, mas ainda não tem nome. O que deseja fazer?',
+      [
+        { text: 'Continuar editando', style: 'cancel' },
+        {
+          text: 'Manter como “Sem título”',
+          onPress: repeat,
+        },
+        {
+          text: 'Descartar cartão',
+          style: 'destructive',
+          onPress: () => {
+            deleteCard(id);
+            repeat();
+          },
+        },
+      ],
+    );
+  });
 
   if (!card) {
     return <View style={styles.missing} />;

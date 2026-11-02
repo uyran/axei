@@ -67,6 +67,12 @@
         "projectId": "1a03243b-9792-4150-a6f2-a9a558602d2a"
       }
     },
-    "owner": "uyran"
+    "owner": "uyran",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1a03243b-9792-4150-a6f2-a9a558602d2a"
+    }
   }
 }
