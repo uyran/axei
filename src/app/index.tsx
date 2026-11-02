@@ -251,6 +251,7 @@ export default function HomeScreen() {
                 shuffleDirection={shuffleDirection}
                 shuffleAxis={shuffleAxis}
                 shuffleIntensity={shuffleIntensity}
+                showFrontPreview={favoritesOnly && index === visibleCards.length - 1}
                 onPress={() => handleOpenCard(card.id)}
                 onToggleFavorite={() => toggleFavorite(card.id)}
               />
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 24,
+    bottom: 36,
     width: 58,
     height: 58,
     borderRadius: 29,

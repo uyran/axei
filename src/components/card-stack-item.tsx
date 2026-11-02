@@ -24,6 +24,7 @@ type CardStackItemProps = {
   shuffleDirection?: number;
   shuffleAxis?: 'x' | 'y' | null;
   shuffleIntensity?: number;
+  showFrontPreview?: boolean;
   onPress: () => void;
   onToggleFavorite: () => void;
 };
@@ -46,6 +47,7 @@ export function CardStackItem({
   shuffleDirection = 1,
   shuffleAxis = null,
   shuffleIntensity = 1,
+  showFrontPreview = false,
   onPress,
   onToggleFavorite,
 }: CardStackItemProps) {
@@ -166,7 +168,7 @@ export function CardStackItem({
         <View style={styles.favoriteButton} />
       </View>
       <View style={styles.nameDivider} />
-      {emergency ? (
+      {emergency || showFrontPreview ? (
         <ScrollView
           style={styles.previewScroll}
           contentContainerStyle={styles.previewScrollContent}
