@@ -27,6 +27,7 @@ import { CardBackground } from '@/components/card-background';
 import { BackEditor } from '@/components/card/back-editor';
 import { ContentEditor } from '@/components/card/content-editor';
 import { FormattingToolbar } from '@/components/card/formatting-toolbar';
+import { HeaderDivider } from '@/components/header-divider';
 import { colors } from '@/constants/colors';
 import { useAppSound } from '@/hooks/use-app-sound';
 import { useCards } from '@/hooks/use-cards';
@@ -206,6 +207,8 @@ export default function CardDetailScreen() {
           <Ionicons name="trash-outline" size={24} color={colors.primary} />
         </Pressable>
       </View>
+
+      <HeaderDivider />
 
       <View style={styles.cardStage}>
         <Animated.View style={[styles.cardFace, frontStyle]}>

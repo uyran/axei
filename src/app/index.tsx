@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CardStackItem } from '@/components/card-stack-item';
+import { HeaderDivider } from '@/components/header-divider';
 import { colors } from '@/constants/colors';
 import { useAppSound } from '@/hooks/use-app-sound';
 import { useCards } from '@/hooks/use-cards';
@@ -197,10 +198,7 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.headerDivider}>
-        <View style={styles.headerDividerShade} />
-        <View style={styles.headerDividerHighlight} />
-      </View>
+      <HeaderDivider />
 
       <View style={styles.searchRow}>
         <View style={styles.searchBarFrame}>
@@ -340,19 +338,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
-  },
-  headerDivider: {
-    height: 2,
-    marginHorizontal: 16,
-    marginTop: 4,
-  },
-  headerDividerShade: {
-    flex: 1,
-    backgroundColor: colors.border,
-  },
-  headerDividerHighlight: {
-    flex: 1,
-    backgroundColor: colors.surface,
   },
   headerButton: {
     width: 40,
