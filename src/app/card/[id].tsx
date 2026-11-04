@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams, usePreventRemove } from 'expo-router';
-import { useAudioPlayer } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentRef } from 'react';
 import {
@@ -24,10 +23,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { RichEditor } from 'react-native-pell-rich-editor';
 
 import { CardBackground } from '@/components/card-background';
+import { AppSoundPlayer } from '@/components/app-sound-player';
 import { BackEditor } from '@/components/card/back-editor';
 import { ContentEditor } from '@/components/card/content-editor';
 import { FormattingToolbar } from '@/components/card/formatting-toolbar';
-import { HeaderDivider } from '@/components/header-divider';
 import { colors } from '@/constants/colors';
 import { useAppSound } from '@/hooks/use-app-sound';
 import { useCards } from '@/hooks/use-cards';
@@ -79,7 +78,7 @@ export default function CardDetailScreen() {
   const rotation = useSharedValue(0);
 
   const [soundKey, setSoundKey] = useState<number>(0);
-  const [selectedSoundUri, setSelectedSoundUri] = useState<any>(null);
+  const [selectedSoundUri, setSelectedSoundUri] = useState<number | null>(null);
   const flipSoundUri = require('../../../assets/sounds/sound2.mp3');
 
   function playFlipSound() {
@@ -177,10 +176,6 @@ export default function CardDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
@@ -208,107 +203,99 @@ export default function CardDetailScreen() {
         </Pressable>
       </View>
 
-      <HeaderDivider />
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.cardStage}>
+          <Animated.View style={[styles.cardFace, frontStyle]}>
+            <CardBackground seed={card.backgroundSeed} style={styles.faceBackground} />
+            <View style={[styles.faceContent, styles.frontFaceContent]}>
+              <View style={[styles.frontStrip, styles.cardMenuBar]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Salvar e recolher teclado"
+                  onPress={handleSave}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
+                >
+                  <Ionicons name="save-outline" size={24} color={colors.primary} />
+                </Pressable>
+                <TextInput
+                  ref={nameInputRef}
+                  style={[styles.nameInput, isEmergencyCard(card) && styles.nameInputEmergency]}
+                  value={card.name}
+                  selection={nameSelection}
+                  onChangeText={(text) => {
+                    setCardName(card.id, text);
+                    setNameSelection(undefined);
+                  }}
+                  onFocus={handleNameFocus}
+                  placeholder={CARD_PLACEHOLDER_NAME}
+                  placeholderTextColor={colors.textMuted}
+                  accessibilityLabel="Nome do cartão"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Girar para o verso"
+                  onPress={handleFlip}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
+                >
+                  <Ionicons name="sync-outline" size={22} color={colors.primary} />
+                </Pressable>
+              </View>
 
-      <View style={styles.cardStage}>
-        <Animated.View style={[styles.cardFace, frontStyle]}>
-          <CardBackground seed={card.backgroundSeed} style={styles.faceBackground} />
-          <View style={styles.faceContent}>
-            <View style={styles.frontStrip}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Salvar e recolher teclado"
-                onPress={handleSave}
-                hitSlop={8}
-                style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
-              >
-                <Ionicons name="save-outline" size={24} color={colors.primary} />
-              </Pressable>
-              <TextInput
-                ref={nameInputRef}
-                style={[styles.nameInput, isEmergencyCard(card) && styles.nameInputEmergency]}
-                value={card.name}
-                selection={nameSelection}
-                onChangeText={(text) => {
-                  setCardName(card.id, text);
-                  setNameSelection(undefined);
-                }}
-                onFocus={handleNameFocus}
-                placeholder={CARD_PLACEHOLDER_NAME}
-                placeholderTextColor={colors.textMuted}
-                accessibilityLabel="Nome do cartão"
-              />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Girar para o verso"
-                onPress={handleFlip}
-                hitSlop={8}
-                style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
-              >
-                <Ionicons name="sync-outline" size={22} color={colors.primary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.editorBox}>
-              <ContentEditor
-                content={card.front}
-                editorRef={editorRef}
-                onChange={(html) => setCardFront(card.id, html)}
-              />
-            </View>
-            <View style={styles.tools}>
-              <FormattingToolbar editorRef={editorRef} />
-            </View>
-          </View>
-        </Animated.View>
-
-        <Animated.View style={[styles.cardFace, backStyle]}>
-          <CardBackground seed={card.backgroundSeed} style={styles.faceBackground} />
-          <View style={styles.faceContent}>
-            <View style={styles.frontStrip}>
-              <View style={styles.stripButton}>
-                <Image
-                  source={require('../../../assets/images/Axei.png')}
-                  style={styles.backIcon}
-                  contentFit="contain"
+              <View style={styles.editorBox}>
+                <ContentEditor
+                  content={card.front}
+                  editorRef={editorRef}
+                  onChange={(html) => setCardFront(card.id, html)}
                 />
               </View>
-              <Text style={styles.backTitle}>Verso</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Girar para a frente"
-                onPress={handleFlip}
-                hitSlop={8}
-                style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
-              >
-                <Ionicons name="sync-outline" size={22} color={colors.primary} />
-              </Pressable>
+              <View style={styles.tools}>
+                <FormattingToolbar editorRef={editorRef} />
+              </View>
             </View>
-            <BackEditor
-              back={card.back}
-              onChange={(back) => setCardBack(card.id, back)}
-            />
-          </View>
-        </Animated.View>
-      </View>
+          </Animated.View>
+
+          <Animated.View style={[styles.cardFace, backStyle]}>
+            <CardBackground seed={card.backgroundSeed} style={styles.faceBackground} />
+            <View style={[styles.faceContent, styles.frontFaceContent]}>
+              <View style={[styles.frontStrip, styles.cardMenuBar]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Salvar e recolher teclado"
+                  onPress={handleSave}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
+                >
+                  <Ionicons name="save-outline" size={24} color={colors.primary} />
+                </Pressable>
+                <Text style={styles.backTitle}>Verso</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Girar para a frente"
+                  onPress={handleFlip}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.stripButton, pressed && styles.pressed]}
+                >
+                  <Ionicons name="sync-outline" size={22} color={colors.primary} />
+                </Pressable>
+              </View>
+              <BackEditor
+                back={card.back}
+                onChange={(back) => setCardBack(card.id, back)}
+              />
+            </View>
+          </Animated.View>
+        </View>
       </KeyboardAvoidingView>
       {selectedSoundUri && (
-        <SoundPlayer uri={selectedSoundUri} key={soundKey} enabled={soundsEnabled} />
+        <AppSoundPlayer source={selectedSoundUri} key={soundKey} enabled={soundsEnabled} />
       )}
     </SafeAreaView>
   );
-}
-
-function SoundPlayer({ uri, enabled }: { uri: any; enabled: boolean }) {
-  const sound = useAudioPlayer(uri);
-  useEffect(() => {
-    if (enabled) {
-      void sound.play();
-    } else {
-      sound.pause();
-    }
-  }, [sound, enabled]);
-  return null;
 }
 
 const styles = StyleSheet.create({
@@ -325,7 +312,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingBottom: 6,
+    flexShrink: 0,
   },
   iconButton: {
     width: 40,
@@ -342,7 +330,8 @@ const styles = StyleSheet.create({
   },
   cardStage: {
     flex: 1,
-    margin: 16,
+    marginHorizontal: 6,
+    marginVertical: 8,
   },
   cardFace: {
     position: 'absolute',
@@ -371,11 +360,16 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 14,
   },
+  frontFaceContent: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
   editorBox: {
     flex: 1,
-    marginTop: 8,
+    minHeight: 0,
+    marginTop: 4,
     marginBottom: 4,
-    marginHorizontal: 4,
+    marginHorizontal: 0,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: 12,
@@ -388,6 +382,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  cardMenuBar: {
+    minHeight: 40,
+    paddingHorizontal: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   stripButton: {
     width: 36,
@@ -406,10 +406,6 @@ const styles = StyleSheet.create({
   nameInputEmergency: {
     color: EMERGENCY_COLOR,
   },
-  backIcon: {
-    width: 26,
-    height: 26,
-  },
   backTitle: {
     flex: 1,
     textAlign: 'center',
@@ -420,6 +416,7 @@ const styles = StyleSheet.create({
   tools: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 60,
     marginTop: 0,
     borderTopWidth: 1,
     borderTopColor: colors.border,

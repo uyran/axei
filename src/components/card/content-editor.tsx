@@ -3,6 +3,58 @@ import { RichEditor } from 'react-native-pell-rich-editor';
 
 import { normalizeCardContent } from '@/utils/card-html';
 
+const KEEP_ACTIVE_LINE_AT_TOP = `
+  (function () {
+    var content = document.getElementById('content');
+    if (!content) return;
+
+    content.addEventListener('input', function () {
+      requestAnimationFrame(function () {
+        var selection = window.getSelection();
+        if (!selection || !selection.rangeCount || !content.contains(selection.anchorNode)) return;
+
+        var range = selection.getRangeAt(0).cloneRange();
+        range.collapse(true);
+        var caretRect = range.getBoundingClientRect();
+
+        if (!caretRect.height && selection.anchorNode.nodeType === Node.TEXT_NODE && selection.anchorOffset > 0) {
+          range.setStart(selection.anchorNode, selection.anchorOffset - 1);
+          range.setEnd(selection.anchorNode, selection.anchorOffset);
+          caretRect = range.getBoundingClientRect();
+        }
+
+        if (!caretRect.height) {
+          var line = selection.anchorNode.nodeType === Node.ELEMENT_NODE
+            ? selection.anchorNode
+            : selection.anchorNode.parentElement;
+          if (!line) return;
+          caretRect = line.getBoundingClientRect();
+        }
+
+        var contentRect = content.getBoundingClientRect();
+        var anchorElement = selection.anchorNode.nodeType === Node.ELEMENT_NODE
+          ? selection.anchorNode
+          : selection.anchorNode.parentElement;
+        var styles = anchorElement ? window.getComputedStyle(anchorElement) : null;
+        var lineHeight = styles ? parseFloat(styles.lineHeight) : NaN;
+        if (!isFinite(lineHeight) || lineHeight <= 0) {
+          var fontSize = styles ? parseFloat(styles.fontSize) : NaN;
+          lineHeight = isFinite(fontSize) ? fontSize * 1.5 : caretRect.height;
+        }
+        if (!isFinite(lineHeight) || lineHeight <= 0) lineHeight = 24;
+        var activeLineHeight = caretRect.height;
+        if (!isFinite(activeLineHeight) || activeLineHeight <= 0 || activeLineHeight > lineHeight * 1.5) {
+          activeLineHeight = lineHeight;
+        }
+
+        content.style.paddingBottom = Math.max(0, content.clientHeight - lineHeight - activeLineHeight) + 'px';
+        content.scrollTop += caretRect.top - contentRect.top - lineHeight;
+      });
+    });
+  })();
+  true;
+`;
+
 type ContentEditorProps = {
   content: string;
   editorRef: RefObject<RichEditor | null>;
@@ -42,12 +94,13 @@ export function ContentEditor({ content, editorRef, onChange }: ContentEditorPro
           .find-table td { min-width: 72px; height: 48px; padding: 8px; border: 1px solid #737980; vertical-align: top; overflow-wrap: anywhere; }
         `,
       }}
+      editorInitializedCallback={() => editorRef.current?.injectJavascript(KEEP_ACTIVE_LINE_AT_TOP)}
       initialContentHTML={normalizeCardContent(content)}
       initialHeight={260}
       onChange={onChange}
       pasteAsPlainText
       placeholder="Escreva aqui o conteúdo da frente do cartão"
-      style={{ flex: 1, minHeight: 220, backgroundColor: 'transparent' }}
+      style={{ flex: 1, minHeight: 0, backgroundColor: 'transparent' }}
       useContainer={false}
     />
   );

@@ -357,12 +357,14 @@ export function BackEditor({ back, onChange }: BackEditorProps) {
 const styles = StyleSheet.create({
   editor: {
     flex: 1,
+    minHeight: 0,
   },
   itemsBox: {
     flex: 1,
-    marginTop: 8,
-    marginBottom: 14,
-    marginHorizontal: 4,
+    minHeight: 0,
+    marginTop: 4,
+    marginBottom: 4,
+    marginHorizontal: 0,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     borderRadius: 12,

@@ -247,7 +247,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 60,
   },
-  content: { alignItems: 'center', paddingHorizontal: 6, paddingVertical: 8, gap: 10 },
+  content: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingVertical: 8,
+  },
   button: {
     width: 42, height: 44, alignItems: 'center', justifyContent: 'center',
     borderRadius: 8, borderWidth: 1, borderColor: '#000000',

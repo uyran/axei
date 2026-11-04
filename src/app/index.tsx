@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useAudioPlayer } from 'expo-audio';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   type GestureResponderEvent,
@@ -18,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CardStackItem } from '@/components/card-stack-item';
+import { AppSoundPlayer } from '@/components/app-sound-player';
 import { HeaderDivider } from '@/components/header-divider';
 import { colors } from '@/constants/colors';
 import { useAppSound } from '@/hooks/use-app-sound';
@@ -46,7 +46,7 @@ export default function HomeScreen() {
   const verticalScrollGesture = useRef(false);
 
   const [soundKey, setSoundKey] = useState<number>(0);
-  const [selectedSoundUri, setSelectedSoundUri] = useState<any>(null);
+  const [selectedSoundUri, setSelectedSoundUri] = useState<number | null>(null);
   const soundGestureUri = require('../../assets/sounds/sound4.mp3');
   const soundSelectUri = require('../../assets/sounds/sound1.mp3');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -272,7 +272,7 @@ export default function HomeScreen() {
         <Ionicons name="add" size={30} color={colors.onPrimary} />
       </Pressable>
       {selectedSoundUri && (
-        <SoundPlayer uri={selectedSoundUri} key={soundKey} enabled={soundsEnabled} />
+        <AppSoundPlayer source={selectedSoundUri} key={soundKey} enabled={soundsEnabled} />
       )}
       {isMenuOpen ? (
         <View style={styles.menuOverlay}>
@@ -315,18 +315,6 @@ export default function HomeScreen() {
   );
 }
 
-function SoundPlayer({ uri, enabled }: { uri: any; enabled: boolean }) {
-  const sound = useAudioPlayer(uri);
-  useEffect(() => {
-    if (enabled) {
-      void sound.play();
-    } else {
-      sound.pause();
-    }
-  }, [sound, enabled]);
-  return null;
-}
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -337,7 +325,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    flexShrink: 0,
   },
   headerButton: {
     width: 40,

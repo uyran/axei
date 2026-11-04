@@ -100,6 +100,9 @@ export function matchesQuery(card: Card, query: string): boolean {
   }
   return (
     displayCardName(card).toLowerCase().includes(normalized) ||
-    htmlToPlainText(card.front).toLowerCase().includes(normalized)
+    htmlToPlainText(card.front).toLowerCase().includes(normalized) ||
+    card.back.some(
+      (item) => item.type === 'note' && item.text.toLowerCase().includes(normalized),
+    )
   );
 }
